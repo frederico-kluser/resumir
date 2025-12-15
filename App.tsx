@@ -82,6 +82,7 @@ export default function App() {
 	const [isFromCache, setIsFromCache] = useState(false);
 	const [showErrorModal, setShowErrorModal] = useState(false);
 	const [errorDetails, setErrorDetails] = useState<string | null>(null);
+	const [isCommunicationError, setIsCommunicationError] = useState(false);
 	const [isImproving, setIsImproving] = useState(false);
 	const [currentTranscript, setCurrentTranscript] = useState<string>('');
 
@@ -319,22 +320,87 @@ export default function App() {
 		setKeySetupSuccess(t('auth.successMessage'));
 	};
 
-	const handleLanguageAwareError = (message: string, details?: string) => {
+	const handleLanguageAwareError = (message: string, details?: string, communicationError = false) => {
 		setStatus(AppState.ERROR);
 		setError(message);
 		setErrorDetails(details || null);
+		setIsCommunicationError(communicationError);
 		setShowErrorModal(true);
 	};
 
 	const handleCloseErrorModal = () => {
 		setShowErrorModal(false);
+		setIsCommunicationError(false);
 	};
 
 	const handleRetryFromError = () => {
 		setShowErrorModal(false);
 		setError(null);
 		setErrorDetails(null);
+		setIsCommunicationError(false);
 		handleSummarize();
+	};
+
+	const handleReloadPage = () => {
+		if (currentTabId && typeof chrome !== 'undefined' && chrome.tabs) {
+			chrome.tabs.reload(currentTabId);
+			setShowErrorModal(false);
+			setError(null);
+			setErrorDetails(null);
+			setIsCommunicationError(false);
+		}
+	};
+
+	// Helper function to re-inject content script and retry communication
+	const reinjectAndRetry = async <T,>(
+		action: string,
+		payload?: Record<string, unknown>,
+	): Promise<{ success: boolean; response?: T; error?: string }> => {
+		if (!currentTabId || typeof chrome === 'undefined') {
+			return { success: false, error: 'No tab ID or chrome API unavailable' };
+		}
+
+		// First try to reinject the content script
+		try {
+			const reinjectResult = await new Promise<{ success: boolean }>((resolve) => {
+				chrome.runtime.sendMessage(
+					{ action: 'REINJECT_CONTENT_SCRIPT', tabId: currentTabId },
+					(response: any) => {
+						if (chrome.runtime?.lastError) {
+							resolve({ success: false });
+							return;
+						}
+						resolve(response || { success: false });
+					},
+				);
+			});
+
+			if (!reinjectResult.success) {
+				return { success: false, error: 'Failed to reinject content script' };
+			}
+
+			// Wait a bit for the content script to initialize
+			await new Promise((resolve) => setTimeout(resolve, 500));
+
+			// Now try to send the message again
+			const response = await new Promise<T>((resolve, reject) => {
+				chrome.tabs.sendMessage(
+					currentTabId,
+					{ action, ...payload },
+					(response: any) => {
+						if (chrome.runtime?.lastError) {
+							reject(new Error(chrome.runtime.lastError.message));
+							return;
+						}
+						resolve(response);
+					},
+				);
+			});
+
+			return { success: true, response };
+		} catch (error: any) {
+			return { success: false, error: error?.message || 'Unknown error' };
+		}
 	};
 
 	const handleConnectGoogle = async () => {
@@ -455,9 +521,31 @@ export default function App() {
 						}
 						throw new Error(response?.error || t('errors.extractionFailed'));
 					}
-				} catch (msgError) {
-					console.error('Message passing failed:', msgError);
-					throw new Error(t('errors.communication'));
+				} catch (msgError: any) {
+					console.warn('Message passing failed, attempting to reinject content script:', msgError);
+
+					// Try to reinject the content script and retry
+					const retryResult = await reinjectAndRetry<{
+						success: boolean;
+						transcript?: string;
+						error?: string;
+						errorCode?: string;
+					}>('EXTRACT_TRANSCRIPT');
+
+					if (retryResult.success && retryResult.response?.success) {
+						transcriptText = retryResult.response.transcript || '';
+						setHasCaptions(true);
+						console.log('Successfully extracted transcript after reinjection');
+					} else if (retryResult.response?.errorCode === 'NO_TRANSCRIPT') {
+						setHasCaptions(false);
+						throw new Error(t('errors.captionsMissing'));
+					} else {
+						// Re-injection failed or extraction still failed - throw communication error
+						console.error('Re-injection or retry failed:', retryResult.error);
+						const communicationError = new Error(t('errors.communication'));
+						(communicationError as any).isCommunicationError = true;
+						throw communicationError;
+					}
 				}
 			} else {
 				transcriptText = getFullTranscriptText();
@@ -539,14 +627,15 @@ export default function App() {
 			const errorStack = err.stack || '';
 			const errorName = err.name || 'Error';
 			const formattedDetails = `${errorName}: ${errorMessage}${errorStack ? `\n\nStack trace:\n${errorStack}` : ''}`;
+			const isCommunicationErr = Boolean(err.isCommunicationError);
 
 			if (err.message && err.message.includes('Requested entity was not found')) {
 				await clearUserApiKey();
 				setApiKey(null);
 				setKeySetupSuccess(null);
-				handleLanguageAwareError(t('errors.apiKeyInvalid'), formattedDetails);
+				handleLanguageAwareError(t('errors.apiKeyInvalid'), formattedDetails, false);
 			} else {
-				handleLanguageAwareError(errorMessage, formattedDetails);
+				handleLanguageAwareError(errorMessage, formattedDetails, isCommunicationErr);
 			}
 		}
 	};
@@ -826,6 +915,7 @@ export default function App() {
 				errorDetails={errorDetails || undefined}
 				onClose={handleCloseErrorModal}
 				onRetry={handleRetryFromError}
+				onReload={isCommunicationError ? handleReloadPage : undefined}
 			/>
 
 			<header
