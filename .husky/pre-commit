@@ -1,0 +1,16 @@
+#!/bin/sh
+
+# Pre-commit hook: Bump version and add changes to commit
+# This script runs before each commit and:
+# 1. Bumps the version in package.json, package-lock.json, and READMEs
+# 2. Adds the modified files to the commit
+
+echo "Pre-commit: Bumping version..."
+
+# Run version bump script
+node scripts/bump-version.js
+
+# Add the modified files to the commit
+git add package.json package-lock.json README.md README.pt-BR.md
+
+echo "Pre-commit: Version files added to commit"
