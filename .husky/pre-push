@@ -5,21 +5,21 @@
 # 1. Builds the project
 # 2. Updates manifest.json version to match package.json
 # 3. Creates dist.zip
-# 4. Amends the last commit to include these changes
+# 4. Amends the last commit to include these changes (only if changed)
 
 echo "Pre-push: Building and packaging..."
 
 # Run build and package script
 node scripts/build-and-package.js
 
-# Check if there are changes to commit
-if git diff --quiet manifest.json dist.zip 2>/dev/null; then
-    echo "Pre-push: No changes to package"
+# Add the build artifacts to staging
+git add manifest.json dist.zip
+
+# Check if there are staged changes compared to HEAD
+if git diff --cached --quiet; then
+    echo "Pre-push: No changes to package (build artifacts unchanged)"
 else
     echo "Pre-push: Adding build artifacts to commit..."
-
-    # Add the modified files
-    git add manifest.json dist.zip
 
     # Amend the last commit to include the build artifacts
     # Using --no-verify to avoid triggering hooks again
