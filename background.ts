@@ -197,9 +197,46 @@ chrome.webNavigation?.onHistoryStateUpdated?.addListener(
   { url: [{ hostContains: 'youtube.com' }] }
 );
 
+// Re-inject content script into a tab
+const reinjectContentScript = async (tabId: number): Promise<boolean> => {
+  try {
+    // First check if the tab exists and is a YouTube video page
+    const tab = await chrome.tabs.get(tabId);
+    if (!isYouTubeVideoPage(tab.url)) {
+      console.warn('Cannot reinject: not a YouTube video page');
+      return false;
+    }
+
+    // Inject the content script
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content.js'],
+    });
+
+    console.log('Content script re-injected successfully for tab:', tabId);
+    return true;
+  } catch (error) {
+    console.error('Failed to reinject content script:', error);
+    return false;
+  }
+};
+
 // Listen for messages from content script or side panel
 chrome.runtime.onMessage.addListener(
   (request: any, sender: any, sendResponse: any) => {
+    // Handle content script re-injection request
+    if (request.action === 'REINJECT_CONTENT_SCRIPT') {
+      const tabId = request.tabId;
+      if (tabId) {
+        reinjectContentScript(tabId)
+          .then((success) => sendResponse({ success }))
+          .catch((error) => sendResponse({ success: false, error: error?.message }));
+        return true; // Indicates async response
+      }
+      sendResponse({ success: false, error: 'No tab ID provided' });
+      return;
+    }
+
     // Handle caption status updates from content script
     if (request.action === 'CAPTION_STATUS_UPDATE' && sender.tab?.id) {
       const tabId = sender.tab.id;
