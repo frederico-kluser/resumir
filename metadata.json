@@ -1,0 +1,5 @@
+{
+	"name": "Resumir",
+	"description": "A Chrome Extension that uses Gemini AI to summarize YouTube videos, answer specific questions based on transcripts, and highlight key moments.",
+	"requestFramePermissions": []
+}
