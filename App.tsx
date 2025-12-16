@@ -10,6 +10,7 @@ import { useTheme } from './hooks/useTheme';
 import { analyzeVideo, answerUserQuestion, improveResult } from './services/geminiService';
 import { getUserApiKey, saveUserApiKey, clearUserApiKey } from './services/apiKeyStorage';
 import { getSummary, saveSummary, extractVideoId, StoredSummary } from './services/summaryStorage';
+import { buildOfflinePrompt, storePendingPrompt, copyToClipboard, openDeepSeekChat } from './services/offlinePromptService';
 import { getFullTranscriptText } from './mockData';
 import { AnalysisResult, AppState } from './types';
 import { LANGUAGE_OPTIONS } from './i18n';
@@ -85,6 +86,8 @@ export default function App() {
 	const [isCommunicationError, setIsCommunicationError] = useState(false);
 	const [isImproving, setIsImproving] = useState(false);
 	const [currentTranscript, setCurrentTranscript] = useState<string>('');
+	const [offlineStatus, setOfflineStatus] = useState<string | null>(null);
+	const [isOfflineLoading, setIsOfflineLoading] = useState(false);
 
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -471,6 +474,96 @@ export default function App() {
 		}
 	};
 
+	const handleOfflineSummarize = async () => {
+		setIsOfflineLoading(true);
+		setOfflineStatus(t('offline.extractingTranscript'));
+
+		try {
+			let transcriptText = '';
+
+			if (isYoutube && currentTabId && typeof chrome !== 'undefined') {
+				try {
+					const response = await chrome.tabs.sendMessage(currentTabId, { action: 'EXTRACT_TRANSCRIPT' });
+
+					if (response && response.success) {
+						transcriptText = response.transcript;
+					} else {
+						if (response?.errorCode === 'NO_TRANSCRIPT') {
+							throw new Error(t('errors.captionsMissing'));
+						}
+						throw new Error(response?.error || t('errors.extractionFailed'));
+					}
+				} catch (msgError: any) {
+					console.warn('Message passing failed, attempting to reinject content script:', msgError);
+
+					const retryResult = await reinjectAndRetry<{
+						success: boolean;
+						transcript?: string;
+						error?: string;
+						errorCode?: string;
+					}>('EXTRACT_TRANSCRIPT');
+
+					if (retryResult.success && retryResult.response?.success) {
+						transcriptText = retryResult.response.transcript || '';
+					} else if (retryResult.response?.errorCode === 'NO_TRANSCRIPT') {
+						throw new Error(t('errors.captionsMissing'));
+					} else {
+						throw new Error(t('errors.communication'));
+					}
+				}
+			} else {
+				transcriptText = getFullTranscriptText();
+			}
+
+			if (!transcriptText || transcriptText.length < 50) {
+				throw new Error(t('errors.transcriptShort'));
+			}
+
+			setOfflineStatus(t('offline.preparingPrompt'));
+
+			// Build the prompt
+			const trimmedQuery = userQuery.trim();
+			const prompt = buildOfflinePrompt(transcriptText, selectedLanguageOption, trimmedQuery);
+
+			// Store the prompt for auto-injection
+			await storePendingPrompt(prompt);
+
+			// Copy to clipboard
+			const copied = await copyToClipboard(prompt);
+
+			if (!copied) {
+				setOfflineStatus(t('offline.copyFailed'));
+				setIsOfflineLoading(false);
+				return;
+			}
+
+			setOfflineStatus(t('offline.openingDeepSeek'));
+
+			// Small delay to show status
+			await new Promise(resolve => setTimeout(resolve, 500));
+
+			// Open DeepSeek
+			openDeepSeekChat();
+
+			// Show success message
+			setOfflineStatus(t('offline.promptCopied'));
+
+			// Clear status after a few seconds
+			setTimeout(() => {
+				setOfflineStatus(null);
+				setIsOfflineLoading(false);
+			}, 5000);
+
+		} catch (err: any) {
+			console.error('Offline summarize error:', err);
+			setOfflineStatus(err.message || t('errors.extractionFailed'));
+			setTimeout(() => {
+				setOfflineStatus(null);
+				setIsOfflineLoading(false);
+			}, 3000);
+		}
+	};
+
 	const handleSummarize = async () => {
 		if (!apiKey) {
 			handleLanguageAwareError(t('errors.apiKeyMissing'), 'API Key is not configured');
@@ -775,6 +868,53 @@ export default function App() {
 
 					{keySetupError && <p className="mt-4 text-sm text-red-500 dark:text-red-400">{keySetupError}</p>}
 					{keySetupSuccess && <p className="mt-2 text-sm text-green-600 dark:text-green-400">{keySetupSuccess}</p>}
+
+					{/* Offline Mode Section */}
+					<div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+						<div className="mb-3">
+							<label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+								{t('input.label')} <span className="text-gray-400 dark:text-gray-500 font-normal">{t('input.optional')}</span>
+							</label>
+							<input
+								type="text"
+								value={userQuery}
+								onChange={(e) => setUserQuery(e.target.value)}
+								placeholder={t('input.placeholder') ?? ''}
+								disabled={!isYoutube || isOfflineLoading}
+								className="w-full mt-1 px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none disabled:opacity-50"
+							/>
+						</div>
+						<button
+							onClick={handleOfflineSummarize}
+							disabled={!isYoutube || isOfflineLoading}
+							className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all shadow-sm"
+						>
+							{isOfflineLoading ? (
+								<svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+									<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+									<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+								</svg>
+							) : (
+								<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+								</svg>
+							)}
+							<span>{t('offline.useWithoutKey')}</span>
+						</button>
+						<p className="mt-2 text-[11px] text-gray-400 dark:text-gray-500 text-center">
+							{t('offline.useWithoutKeyDescription')}
+						</p>
+						{offlineStatus && (
+							<p className={`mt-2 text-sm text-center ${offlineStatus.includes('copied') || offlineStatus.includes('copiado') || offlineStatus.includes('copié') ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+								{offlineStatus}
+							</p>
+						)}
+						{!isYoutube && (
+							<p className="mt-2 text-xs text-amber-600 dark:text-amber-400 text-center">
+								{t('modal.noVideoDescription')}
+							</p>
+						)}
+					</div>
 
 					<p className="mt-4 text-[10px] text-gray-400 dark:text-gray-500">
 						{t('auth.billingNotice')}

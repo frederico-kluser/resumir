@@ -1,18 +1,20 @@
 {
   "manifest_version": 3,
   "name": "Resumir",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Get summaries and answers from YouTube videos using Gemini AI.",
   "permissions": [
     "sidePanel",
     "tabs",
     "scripting",
     "webNavigation",
-    "storage"
+    "storage",
+    "clipboardWrite"
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
-    "https://generativelanguage.googleapis.com/*"
+    "https://generativelanguage.googleapis.com/*",
+    "https://chat.deepseek.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -36,6 +38,15 @@
       "js": [
         "content.js"
       ]
+    },
+    {
+      "matches": [
+        "https://chat.deepseek.com/*"
+      ],
+      "js": [
+        "deepseekContent.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "icons": {

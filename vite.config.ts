@@ -53,6 +53,7 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         background: resolve(__dirname, 'background.ts'),
         content: resolve(__dirname, 'content.ts'),
+        deepseekContent: resolve(__dirname, 'deepseekContent.ts'),
       },
       output: {
         entryFileNames: '[name].js',
