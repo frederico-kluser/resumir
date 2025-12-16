@@ -93,6 +93,9 @@ const resources = {
 				extensionMode: 'Extension Mode',
 				mockMode: 'Mock Mode',
 			},
+			sidebar: {
+				close: 'Close sidebar',
+			},
 			button: {
 				analyzing: 'Analyzing...',
 			},
@@ -225,6 +228,9 @@ const resources = {
 				powered: 'Impulsado por Gemini • {{mode}}',
 				extensionMode: 'Modo extensión',
 				mockMode: 'Modo simulado',
+			},
+			sidebar: {
+				close: 'Cerrar barra lateral',
 			},
 			button: {
 				analyzing: 'Analizando...',
@@ -359,6 +365,9 @@ const resources = {
 				extensionMode: 'Modo extensão',
 				mockMode: 'Modo simulado',
 			},
+			sidebar: {
+				close: 'Fechar painel lateral',
+			},
 			button: {
 				analyzing: 'Analisando...',
 			},
@@ -492,6 +501,9 @@ const resources = {
 				extensionMode: 'Mode extension',
 				mockMode: 'Mode simulé',
 			},
+			sidebar: {
+				close: 'Fermer le panneau latéral',
+			},
 			button: {
 				analyzing: 'Analyse...',
 			},
@@ -624,6 +636,9 @@ const resources = {
 				extensionMode: 'وضع الامتداد',
 				mockMode: 'وضع المحاكاة',
 			},
+			sidebar: {
+				close: 'إغلاق اللوحة الجانبية',
+			},
 			button: {
 				analyzing: 'جارٍ التحليل...',
 			},
@@ -754,6 +769,9 @@ const resources = {
 				powered: '由 Gemini 提供支持 • {{mode}}',
 				extensionMode: '扩展模式',
 				mockMode: '模拟模式',
+			},
+			sidebar: {
+				close: '关闭侧边栏',
 			},
 			button: {
 				analyzing: '正在分析...',
@@ -888,6 +906,9 @@ const resources = {
 				extensionMode: 'एक्सटेंशन मोड',
 				mockMode: 'मॉक मोड',
 			},
+			sidebar: {
+				close: 'साइडबार बंद करें',
+			},
 			button: {
 				analyzing: 'विश्लेषण हो रहा है...',
 			},
@@ -1021,6 +1042,9 @@ const resources = {
 				extensionMode: 'এক্সটেনশন মোড',
 				mockMode: 'মক মোড',
 			},
+			sidebar: {
+				close: 'সাইডবার বন্ধ করুন',
+			},
 			button: {
 				analyzing: 'বিশ্লেষণ চলছে...',
 			},
@@ -1152,6 +1176,9 @@ const resources = {
 				powered: 'Работает на Gemini • {{mode}}',
 				extensionMode: 'Режим расширения',
 				mockMode: 'Демонстрационный режим',
+			},
+			sidebar: {
+				close: 'Закрыть боковую панель',
 			},
 			button: {
 				analyzing: 'Идёт анализ...',
@@ -1285,6 +1312,9 @@ const resources = {
 				powered: 'Didukung oleh Gemini • {{mode}}',
 				extensionMode: 'Mode ekstensi',
 				mockMode: 'Mode simulasi',
+			},
+			sidebar: {
+				close: 'Tutup panel samping',
 			},
 			button: {
 				analyzing: 'Sedang menganalisis...',

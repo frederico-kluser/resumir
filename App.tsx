@@ -1196,6 +1196,16 @@ export default function App() {
 				<div className="flex items-center gap-2">
 					<Logo className="w-7 h-7" />
 					<h1 className="font-bold text-lg text-gray-900 dark:text-gray-100 tracking-tight">Resumir</h1>
+					<button
+						onClick={() => window.close()}
+						className="ml-auto p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+						title={t('sidebar.close') ?? 'Close sidebar'}
+						aria-label={t('sidebar.close') ?? 'Close sidebar'}
+					>
+						<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+							<path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
 				</div>
 				<div className="grid grid-cols-2 gap-2">
 					{/* Row 1 */}
