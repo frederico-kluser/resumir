@@ -22,11 +22,10 @@ const SELECTORS = {
 		'.chat-input textarea',
 		'[data-testid="chat-input"]',
 	],
-	// Send button selectors
+	// Send button selectors (specific to the send button with upload arrow icon)
 	sendButton: [
-		'div.ds-icon-button[role="button"][aria-disabled="false"]',
-		'div.ds-icon-button[role="button"]',
-		'div[role="button"][aria-disabled]',
+		'div.ds-icon-button--l.ds-icon-button--sizing-container[role="button"][aria-disabled="false"]',
+		'div.ds-icon-button--l[role="button"][aria-disabled="false"]',
 		'button[type="submit"]',
 		'button[aria-label*="send" i]',
 		'button[aria-label*="enviar" i]',
