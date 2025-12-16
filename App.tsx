@@ -6,6 +6,7 @@ import { LoadingStatus } from './components/LoadingStatus';
 import { ErrorModal } from './components/ErrorModal';
 import { Toast } from './components/Toast';
 import { ThemeSelector } from './components/ThemeSelector';
+import { AudioPlayButton } from './components/AudioPlayButton';
 import { useTheme } from './hooks/useTheme';
 import { analyzeVideo, answerUserQuestion, improveResult } from './services/geminiService';
 import { getUserApiKey, saveUserApiKey, clearUserApiKey } from './services/apiKeyStorage';
@@ -85,6 +86,7 @@ export default function App() {
 	const [isCommunicationError, setIsCommunicationError] = useState(false);
 	const [isImproving, setIsImproving] = useState(false);
 	const [currentTranscript, setCurrentTranscript] = useState<string>('');
+	const [showAudioApiKeyModal, setShowAudioApiKeyModal] = useState(false);
 
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -918,6 +920,32 @@ export default function App() {
 				onReload={isCommunicationError ? handleReloadPage : undefined}
 			/>
 
+			{/* Audio API Key Required Modal */}
+			{showAudioApiKeyModal && (
+				<div className="absolute inset-0 z-50 bg-gray-900/40 dark:bg-gray-950/60 backdrop-blur-[2px] flex items-center justify-center p-6 animate-fade-in">
+					<div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-6 text-center max-w-sm w-full transform transition-all scale-100">
+						<div className="mx-auto w-14 h-14 bg-amber-50 dark:bg-amber-900/30 text-amber-500 dark:text-amber-400 rounded-full flex items-center justify-center mb-4 ring-8 ring-amber-50/50 dark:ring-amber-900/30">
+							<svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth="2"
+									d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.536a5 5 0 001.414 1.414m2.828-9.9a9 9 0 0112.728 0"
+								/>
+							</svg>
+						</div>
+						<h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">{t('audio.noApiKeyTitle')}</h3>
+						<p className="text-gray-500 dark:text-gray-400 text-sm mb-6 leading-relaxed">{t('audio.noApiKeyDescription')}</p>
+						<button
+							onClick={() => setShowAudioApiKeyModal(false)}
+							className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white rounded-lg font-medium transition-colors text-sm shadow-sm"
+						>
+							{t('errorModal.close')}
+						</button>
+					</div>
+				</div>
+			)}
+
 			<header
 				className={`sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-4 py-3 shadow-sm flex flex-col gap-2 md:flex-row md:items-center md:justify-between transition-opacity ${
 					!isYoutube ? 'opacity-50 pointer-events-none' : ''
@@ -1040,6 +1068,13 @@ export default function App() {
 										/>
 									</svg>
 								}
+								headerAction={
+									<AudioPlayButton
+										text={result.customAnswer.text}
+										apiKey={apiKey}
+										onNoApiKey={() => setShowAudioApiKeyModal(true)}
+									/>
+								}
 							>
 								<p className="text-gray-900 dark:text-gray-100 font-medium mb-3">{result.customAnswer.text}</p>
 								{result.customAnswer.relatedSegments && result.customAnswer.relatedSegments.length > 0 && (
@@ -1058,6 +1093,13 @@ export default function App() {
 								<svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7" />
 								</svg>
+							}
+							headerAction={
+								<AudioPlayButton
+									text={result.summary}
+									apiKey={apiKey}
+									onNoApiKey={() => setShowAudioApiKeyModal(true)}
+								/>
 							}
 						>
 							{result.summary}
