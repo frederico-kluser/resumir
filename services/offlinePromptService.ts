@@ -8,6 +8,7 @@
 import { LanguageOption } from '../types';
 
 const DEEPSEEK_STORAGE_KEY = 'resumir.deepseek.pendingPrompt';
+const CHATGPT_STORAGE_KEY = 'resumir.chatgpt.pendingPrompt';
 
 declare var chrome: any;
 
@@ -171,5 +172,32 @@ export const openDeepSeekChat = (): void => {
 		chrome.tabs.create({ url: deepseekUrl });
 	} else {
 		window.open(deepseekUrl, '_blank');
+	}
+};
+
+/**
+ * Opens ChatGPT in a new tab
+ */
+export const openChatGPT = (): void => {
+	const chatgptUrl = 'https://chatgpt.com/';
+
+	if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
+		chrome.tabs.create({ url: chatgptUrl });
+	} else {
+		window.open(chatgptUrl, '_blank');
+	}
+};
+
+/**
+ * Stores the prompt in chrome.storage for the specified service's content script to pick up
+ */
+export const storePendingPromptForService = async (prompt: string, service: 'deepseek' | 'chatgpt'): Promise<void> => {
+	const storageKey = service === 'deepseek' ? DEEPSEEK_STORAGE_KEY : CHATGPT_STORAGE_KEY;
+
+	if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+		await chrome.storage.local.set({ [storageKey]: prompt });
+	} else {
+		// Fallback to localStorage for development
+		localStorage.setItem(storageKey, prompt);
 	}
 };
