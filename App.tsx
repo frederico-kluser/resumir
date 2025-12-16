@@ -17,6 +17,7 @@ import { AnalysisResult, AppState } from './types';
 import { LANGUAGE_OPTIONS } from './i18n';
 
 const LANGUAGE_STORAGE_KEY = 'tubegist.language';
+const OFFLINE_MODE_STORAGE_KEY = 'tubegist.offlineMode';
 const SUPPORTED_LANGUAGE_CODES = new Set(LANGUAGE_OPTIONS.map(({ code }) => code));
 
 // Timeout and retry configuration for initial summary generation
@@ -222,6 +223,20 @@ export default function App() {
 
 		initLanguage();
 	}, [i18n]);
+
+	// Initialize offline mode preference from storage
+	useEffect(() => {
+		if (typeof window !== 'undefined') {
+			try {
+				const storedOfflineMode = window.localStorage.getItem(OFFLINE_MODE_STORAGE_KEY);
+				if (storedOfflineMode === 'true') {
+					setOfflineMode(true);
+				}
+			} catch (storageError) {
+				console.warn('Failed to read stored offline mode preference', storageError);
+			}
+		}
+	}, []);
 
 	// 1. Check for API Key on Mount
 	useEffect(() => {
@@ -1007,7 +1022,14 @@ export default function App() {
 					{/* Continue Without Key Section */}
 					<div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
 						<button
-							onClick={() => setOfflineMode(true)}
+							onClick={() => {
+								setOfflineMode(true);
+								try {
+									window.localStorage.setItem(OFFLINE_MODE_STORAGE_KEY, 'true');
+								} catch (e) {
+									console.warn('Failed to persist offline mode preference', e);
+								}
+							}}
 							className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium rounded-lg transition-all border border-gray-200 dark:border-gray-600"
 						>
 							<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1301,7 +1323,14 @@ export default function App() {
 
 							{/* Back to login button */}
 							<button
-								onClick={() => setOfflineMode(false)}
+								onClick={() => {
+									setOfflineMode(false);
+									try {
+										window.localStorage.removeItem(OFFLINE_MODE_STORAGE_KEY);
+									} catch (e) {
+										console.warn('Failed to clear offline mode preference', e);
+									}
+								}}
 								className="mt-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 underline"
 							>
 								{t('offline.backToLogin')}
