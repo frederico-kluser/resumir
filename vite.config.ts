@@ -54,6 +54,7 @@ export default defineConfig({
         background: resolve(__dirname, 'background.ts'),
         content: resolve(__dirname, 'content.ts'),
         deepseekContent: resolve(__dirname, 'deepseekContent.ts'),
+        chatgptContent: resolve(__dirname, 'chatgptContent.ts'),
       },
       output: {
         entryFileNames: '[name].js',

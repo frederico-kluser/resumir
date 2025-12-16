@@ -11,7 +11,7 @@ import { useTheme } from './hooks/useTheme';
 import { analyzeVideo, answerUserQuestion, improveResult } from './services/geminiService';
 import { getUserApiKey, saveUserApiKey, clearUserApiKey } from './services/apiKeyStorage';
 import { getSummary, saveSummary, extractVideoId, StoredSummary } from './services/summaryStorage';
-import { buildOfflinePrompt, storePendingPrompt, copyToClipboard, openDeepSeekChat } from './services/offlinePromptService';
+import { buildOfflinePrompt, storePendingPrompt, copyToClipboard, openDeepSeekChat, openChatGPT, storePendingPromptForService } from './services/offlinePromptService';
 import { getFullTranscriptText } from './mockData';
 import { AnalysisResult, AppState } from './types';
 import { LANGUAGE_OPTIONS } from './i18n';
@@ -163,6 +163,7 @@ export default function App() {
 	const [offlineStatus, setOfflineStatus] = useState<string | null>(null);
 	const [isOfflineLoading, setIsOfflineLoading] = useState(false);
 	const [retryAttempt, setRetryAttempt] = useState(0);
+	const [offlineMode, setOfflineMode] = useState(false);
 
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -549,7 +550,7 @@ export default function App() {
 		}
 	};
 
-	const handleOfflineSummarize = async () => {
+	const handleOfflineSummarize = async (service: 'deepseek' | 'chatgpt') => {
 		setIsOfflineLoading(true);
 		setOfflineStatus(t('offline.extractingTranscript'));
 
@@ -600,8 +601,8 @@ export default function App() {
 			const trimmedQuery = userQuery.trim();
 			const prompt = buildOfflinePrompt(transcriptText, selectedLanguageOption, trimmedQuery);
 
-			// Store the prompt for auto-injection
-			await storePendingPrompt(prompt);
+			// Store the prompt for auto-injection (with service identifier)
+			await storePendingPromptForService(prompt, service);
 
 			// Copy to clipboard
 			const copied = await copyToClipboard(prompt);
@@ -612,13 +613,18 @@ export default function App() {
 				return;
 			}
 
-			setOfflineStatus(t('offline.openingDeepSeek'));
+			const serviceName = service === 'deepseek' ? 'DeepSeek' : 'ChatGPT';
+			setOfflineStatus(t('offline.openingService', { service: serviceName }));
 
 			// Small delay to show status
 			await new Promise(resolve => setTimeout(resolve, 500));
 
-			// Open DeepSeek
-			openDeepSeekChat();
+			// Open the appropriate service
+			if (service === 'deepseek') {
+				openDeepSeekChat();
+			} else {
+				openChatGPT();
+			}
 
 			// Show success message
 			setOfflineStatus(t('offline.promptCopied'));
@@ -935,7 +941,7 @@ export default function App() {
 	}
 
 	// LOGIN SCREEN
-	if (!apiKey) {
+	if (!apiKey && !offlineMode) {
 		return (
 			<div className="w-full min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center p-6 text-center">
 				<div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 w-full max-w-sm">
@@ -998,51 +1004,20 @@ export default function App() {
 					{keySetupError && <p className="mt-4 text-sm text-red-500 dark:text-red-400">{keySetupError}</p>}
 					{keySetupSuccess && <p className="mt-2 text-sm text-green-600 dark:text-green-400">{keySetupSuccess}</p>}
 
-					{/* Offline Mode Section */}
+					{/* Continue Without Key Section */}
 					<div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-						<div className="mb-3">
-							<label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
-								{t('input.label')} <span className="text-gray-400 dark:text-gray-500 font-normal">{t('input.optional')}</span>
-							</label>
-							<input
-								type="text"
-								value={userQuery}
-								onChange={(e) => setUserQuery(e.target.value)}
-								placeholder={t('input.placeholder') ?? ''}
-								disabled={!isYoutube || isOfflineLoading}
-								className="w-full mt-1 px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none disabled:opacity-50"
-							/>
-						</div>
 						<button
-							onClick={handleOfflineSummarize}
-							disabled={!isYoutube || isOfflineLoading}
-							className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all shadow-sm"
+							onClick={() => setOfflineMode(true)}
+							className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium rounded-lg transition-all border border-gray-200 dark:border-gray-600"
 						>
-							{isOfflineLoading ? (
-								<svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-									<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-									<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-								</svg>
-							) : (
-								<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-								</svg>
-							)}
-							<span>{t('offline.useWithoutKey')}</span>
+							<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+							</svg>
+							<span>{t('offline.continueWithoutKey')}</span>
 						</button>
 						<p className="mt-2 text-[11px] text-gray-400 dark:text-gray-500 text-center">
-							{t('offline.useWithoutKeyDescription')}
+							{t('offline.continueWithoutKeyDescription')}
 						</p>
-						{offlineStatus && (
-							<p className={`mt-2 text-sm text-center ${offlineStatus.includes('copied') || offlineStatus.includes('copiado') || offlineStatus.includes('copié') ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
-								{offlineStatus}
-							</p>
-						)}
-						{!isYoutube && (
-							<p className="mt-2 text-xs text-amber-600 dark:text-amber-400 text-center">
-								{t('modal.noVideoDescription')}
-							</p>
-						)}
 					</div>
 
 					<p className="mt-4 text-[10px] text-gray-400 dark:text-gray-500">
@@ -1272,9 +1247,67 @@ export default function App() {
 						rows={2}
 					/>
 
-					<Button onClick={handleSummarize} isLoading={status === AppState.LOADING} disabled={!isYoutube}>
-						{userQuery.trim() ? t('input.buttonQuery') : t('input.buttonDefault')}
-					</Button>
+					{apiKey ? (
+						<Button onClick={handleSummarize} isLoading={status === AppState.LOADING} disabled={!isYoutube}>
+							{userQuery.trim() ? t('input.buttonQuery') : t('input.buttonDefault')}
+						</Button>
+					) : (
+						<div className="flex flex-col gap-2">
+							{/* DeepSeek Button */}
+							<button
+								onClick={() => handleOfflineSummarize('deepseek')}
+								disabled={!isYoutube || isOfflineLoading}
+								className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all shadow-sm"
+							>
+								{isOfflineLoading ? (
+									<svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+										<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+										<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+									</svg>
+								) : (
+									/* DeepSeek Logo */
+									<svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+										<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+									</svg>
+								)}
+								<span>{t('offline.summarizeWithDeepSeek')}</span>
+							</button>
+
+							{/* ChatGPT Button */}
+							<button
+								onClick={() => handleOfflineSummarize('chatgpt')}
+								disabled={!isYoutube || isOfflineLoading}
+								className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all shadow-sm"
+							>
+								{isOfflineLoading ? (
+									<svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+										<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+										<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+									</svg>
+								) : (
+									/* OpenAI Logo */
+									<svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+										<path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364l2.0201-1.1638a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.4046-.6813zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/>
+									</svg>
+								)}
+								<span>{t('offline.summarizeWithChatGPT')}</span>
+							</button>
+
+							{offlineStatus && (
+								<p className={`mt-2 text-sm text-center ${offlineStatus.includes('copied') || offlineStatus.includes('copiado') || offlineStatus.includes('copié') ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+									{offlineStatus}
+								</p>
+							)}
+
+							{/* Back to login button */}
+							<button
+								onClick={() => setOfflineMode(false)}
+								className="mt-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 underline"
+							>
+								{t('offline.backToLogin')}
+							</button>
+						</div>
+					)}
 
 					<LoadingStatus isActive={status === AppState.LOADING} transcriptLength={transcriptLength} />
 				</div>

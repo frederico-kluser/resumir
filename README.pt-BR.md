@@ -4,7 +4,7 @@
 
 **Resuma vídeos do YouTube com Inteligência Artificial**
 
-[![Version](https://img.shields.io/badge/Version-0.0.7-blue.svg)](https://github.com/user/resumir/releases)
+[![Version](https://img.shields.io/badge/Version-0.0.8-blue.svg)](https://github.com/user/resumir/releases)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 [![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-green?logo=googlechrome&logoColor=white)](https://chrome.google.com/webstore)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev)
