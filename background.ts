@@ -98,6 +98,22 @@ chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
   .catch((error: any) => console.error('Failed to set panel behavior:', error));
 
+// Open side panel automatically for a YouTube video tab
+const openSidePanelForTab = async (tabId: number): Promise<void> => {
+  try {
+    // Check if the tab is active in its window
+    const tab = await chrome.tabs.get(tabId);
+    if (!tab.active) {
+      return; // Only open if the tab is currently active
+    }
+
+    // Open the side panel for this tab
+    await chrome.sidePanel.open({ tabId });
+  } catch (error) {
+    console.warn('Failed to open side panel:', error);
+  }
+};
+
 // Check captions availability for a tab
 const checkCaptionsForTab = async (tabId: number) => {
   try {
@@ -138,6 +154,8 @@ chrome.tabs.onUpdated.addListener(
     }
 
     if (isYouTubeVideoPage(tab.url)) {
+      // Open side panel automatically when entering a YouTube video
+      openSidePanelForTab(tabId);
       // Give the page a moment to fully initialize the player
       setTimeout(() => checkCaptionsForTab(tabId), 1500);
     } else {
@@ -186,6 +204,8 @@ chrome.webNavigation?.onHistoryStateUpdated?.addListener(
     const { tabId, url } = details;
 
     if (isYouTubeVideoPage(url)) {
+      // Open side panel automatically when navigating to a YouTube video
+      openSidePanelForTab(tabId);
       // New video loaded via SPA navigation, check captions after a delay
       setTimeout(() => checkCaptionsForTab(tabId), 1500);
     } else {
