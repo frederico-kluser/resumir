@@ -11,7 +11,7 @@ import { useTheme } from './hooks/useTheme';
 import { analyzeVideo, answerUserQuestion, improveResult } from './services/geminiService';
 import { getUserApiKey, saveUserApiKey, clearUserApiKey } from './services/apiKeyStorage';
 import { getSummary, saveSummary, extractVideoId, StoredSummary } from './services/summaryStorage';
-import { buildOfflinePrompt, storePendingPrompt, copyToClipboard, openDeepSeekChat, openChatGPT, storePendingPromptForService } from './services/offlinePromptService';
+import { buildOfflinePrompt, storePendingPrompt, copyToClipboard, openDeepSeekChat, openChatGPT, openGeminiChat, storePendingPromptForService } from './services/offlinePromptService';
 import { getFullTranscriptText } from './mockData';
 import { AnalysisResult, AppState } from './types';
 import { LANGUAGE_OPTIONS } from './i18n';
@@ -565,7 +565,7 @@ export default function App() {
 		}
 	};
 
-	const handleOfflineSummarize = async (service: 'deepseek' | 'chatgpt') => {
+	const handleOfflineSummarize = async (service: 'deepseek' | 'chatgpt' | 'gemini') => {
 		setIsOfflineLoading(true);
 		setOfflineStatus(t('offline.extractingTranscript'));
 
@@ -628,7 +628,7 @@ export default function App() {
 				return;
 			}
 
-			const serviceName = service === 'deepseek' ? 'DeepSeek' : 'ChatGPT';
+			const serviceName = service === 'deepseek' ? 'DeepSeek' : service === 'chatgpt' ? 'ChatGPT' : 'Gemini';
 			setOfflineStatus(t('offline.openingService', { service: serviceName }));
 
 			// Small delay to show status
@@ -637,8 +637,10 @@ export default function App() {
 			// Open the appropriate service
 			if (service === 'deepseek') {
 				openDeepSeekChat();
-			} else {
+			} else if (service === 'chatgpt') {
 				openChatGPT();
+			} else {
+				openGeminiChat();
 			}
 
 			// Close the sidebar after opening the service (only in offline mode)
@@ -1320,6 +1322,26 @@ export default function App() {
 									</svg>
 								)}
 								<span>{t('offline.summarizeWithChatGPT')}</span>
+							</button>
+
+							{/* Gemini Button */}
+							<button
+								onClick={() => handleOfflineSummarize('gemini')}
+								disabled={!isYoutube || isOfflineLoading}
+								className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all shadow-sm"
+							>
+								{isOfflineLoading ? (
+									<svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+										<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+										<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+									</svg>
+								) : (
+									/* Google Gemini Logo */
+									<svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+										<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+									</svg>
+								)}
+								<span>{t('offline.summarizeWithGemini')}</span>
 							</button>
 
 							{offlineStatus && (

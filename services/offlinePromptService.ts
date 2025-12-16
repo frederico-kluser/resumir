@@ -9,6 +9,7 @@ import { LanguageOption } from '../types';
 
 const DEEPSEEK_STORAGE_KEY = 'resumir.deepseek.pendingPrompt';
 const CHATGPT_STORAGE_KEY = 'resumir.chatgpt.pendingPrompt';
+const GEMINI_STORAGE_KEY = 'resumir.gemini.pendingPrompt';
 
 declare var chrome: any;
 
@@ -189,10 +190,34 @@ export const openChatGPT = (): void => {
 };
 
 /**
+ * Opens Gemini Chat in a new tab
+ */
+export const openGeminiChat = (): void => {
+	const geminiUrl = 'https://gemini.google.com/';
+
+	if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
+		chrome.tabs.create({ url: geminiUrl });
+	} else {
+		window.open(geminiUrl, '_blank');
+	}
+};
+
+/**
  * Stores the prompt in chrome.storage for the specified service's content script to pick up
  */
-export const storePendingPromptForService = async (prompt: string, service: 'deepseek' | 'chatgpt'): Promise<void> => {
-	const storageKey = service === 'deepseek' ? DEEPSEEK_STORAGE_KEY : CHATGPT_STORAGE_KEY;
+export const storePendingPromptForService = async (prompt: string, service: 'deepseek' | 'chatgpt' | 'gemini'): Promise<void> => {
+	let storageKey: string;
+	switch (service) {
+		case 'deepseek':
+			storageKey = DEEPSEEK_STORAGE_KEY;
+			break;
+		case 'chatgpt':
+			storageKey = CHATGPT_STORAGE_KEY;
+			break;
+		case 'gemini':
+			storageKey = GEMINI_STORAGE_KEY;
+			break;
+	}
 
 	if (typeof chrome !== 'undefined' && chrome.storage?.local) {
 		await chrome.storage.local.set({ [storageKey]: prompt });
