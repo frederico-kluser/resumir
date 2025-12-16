@@ -626,14 +626,11 @@ export default function App() {
 				openChatGPT();
 			}
 
-			// Show success message
-			setOfflineStatus(t('offline.promptCopied'));
-
-			// Clear status after a few seconds
+			// Close the sidebar after opening the service (only in offline mode)
+			// Small delay to ensure the new tab opens before closing
 			setTimeout(() => {
-				setOfflineStatus(null);
-				setIsOfflineLoading(false);
-			}, 5000);
+				window.close();
+			}, 300);
 
 		} catch (err: any) {
 			console.error('Offline summarize error:', err);
