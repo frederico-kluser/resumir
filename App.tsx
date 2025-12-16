@@ -19,7 +19,79 @@ import { LANGUAGE_OPTIONS } from './i18n';
 const LANGUAGE_STORAGE_KEY = 'tubegist.language';
 const SUPPORTED_LANGUAGE_CODES = new Set(LANGUAGE_OPTIONS.map(({ code }) => code));
 
+// Timeout and retry configuration for initial summary generation
+const SUMMARY_TIMEOUT_MS = 10000; // 10 seconds
+const MAX_RETRY_ATTEMPTS = 3; // Total attempts (1 original + 2 retries)
+
 declare var chrome: any;
+
+// Custom error class for timeout errors
+class TimeoutError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'TimeoutError';
+	}
+}
+
+// Helper function to execute a promise with timeout
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, operationName: string): Promise<T> => {
+	return new Promise((resolve, reject) => {
+		const timeoutId = setTimeout(() => {
+			reject(new TimeoutError(`${operationName} timed out after ${timeoutMs / 1000} seconds`));
+		}, timeoutMs);
+
+		promise
+			.then((result) => {
+				clearTimeout(timeoutId);
+				resolve(result);
+			})
+			.catch((error) => {
+				clearTimeout(timeoutId);
+				reject(error);
+			});
+	});
+};
+
+// Helper function to execute with timeout and retry
+const withTimeoutAndRetry = async <T,>(
+	operation: () => Promise<T>,
+	timeoutMs: number,
+	maxAttempts: number,
+	operationName: string,
+	onRetry?: (attempt: number, error: Error) => void,
+): Promise<T> => {
+	let lastError: Error | null = null;
+
+	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+		try {
+			return await withTimeout(operation(), timeoutMs, operationName);
+		} catch (error) {
+			lastError = error as Error;
+
+			// Check if it's a timeout or network error (retryable)
+			const isRetryable =
+				error instanceof TimeoutError ||
+				(error as any)?.message?.toLowerCase().includes('network') ||
+				(error as any)?.message?.toLowerCase().includes('fetch') ||
+				(error as any)?.message?.toLowerCase().includes('connection') ||
+				(error as any)?.name === 'TypeError'; // Often network errors
+
+			if (isRetryable && attempt < maxAttempts) {
+				console.warn(`Attempt ${attempt}/${maxAttempts} failed for ${operationName}:`, error);
+				onRetry?.(attempt, error as Error);
+				// Small delay before retry to avoid hammering the API
+				await new Promise((resolve) => setTimeout(resolve, 500));
+				continue;
+			}
+
+			// Non-retryable error or max attempts reached
+			throw error;
+		}
+	}
+
+	// This should never be reached, but TypeScript needs it
+	throw lastError || new Error('Unknown error');
+};
 
 type NullableBoolean = boolean | null;
 
@@ -90,6 +162,7 @@ export default function App() {
 	const [showAudioApiKeyModal, setShowAudioApiKeyModal] = useState(false);
 	const [offlineStatus, setOfflineStatus] = useState<string | null>(null);
 	const [isOfflineLoading, setIsOfflineLoading] = useState(false);
+	const [retryAttempt, setRetryAttempt] = useState(0);
 
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -659,13 +732,33 @@ export default function App() {
 			const trimmedQuery = userQuery.trim();
 			let initialResult: AnalysisResult;
 
+			// Reset retry attempt counter
+			setRetryAttempt(0);
+
+			// Callback to track retry attempts for UI feedback
+			const handleRetry = (attempt: number, error: Error) => {
+				console.log(`Retry attempt ${attempt} due to:`, error.message);
+				setRetryAttempt(attempt);
+			};
+
 			if (trimmedQuery) {
 				// User has a question: make TWO separate API calls in parallel
-				// 1. Answer the user's question
-				// 2. Summarize the video (without the question)
+				// Both wrapped with timeout and retry logic
 				const [userAnswerResult, analysisResult] = await Promise.all([
-					answerUserQuestion(transcriptText, trimmedQuery, apiKey, selectedLanguageOption),
-					analyzeVideo(transcriptText, apiKey, selectedLanguageOption),
+					withTimeoutAndRetry(
+						() => answerUserQuestion(transcriptText, trimmedQuery, apiKey, selectedLanguageOption),
+						SUMMARY_TIMEOUT_MS,
+						MAX_RETRY_ATTEMPTS,
+						'User question analysis',
+						handleRetry,
+					),
+					withTimeoutAndRetry(
+						() => analyzeVideo(transcriptText, apiKey, selectedLanguageOption),
+						SUMMARY_TIMEOUT_MS,
+						MAX_RETRY_ATTEMPTS,
+						'Video analysis',
+						handleRetry,
+					),
 				]);
 
 				// Combine results: user answer goes in customAnswer field
@@ -675,9 +768,18 @@ export default function App() {
 					keyMoments: analysisResult.keyMoments,
 				};
 			} else {
-				// No question: just summarize
-				initialResult = await analyzeVideo(transcriptText, apiKey, selectedLanguageOption);
+				// No question: just summarize with timeout and retry
+				initialResult = await withTimeoutAndRetry(
+					() => analyzeVideo(transcriptText, apiKey, selectedLanguageOption),
+					SUMMARY_TIMEOUT_MS,
+					MAX_RETRY_ATTEMPTS,
+					'Video analysis',
+					handleRetry,
+				);
 			}
+
+			// Reset retry counter on success
+			setRetryAttempt(0);
 
 			// Show initial result immediately
 			setResult(initialResult);
@@ -718,11 +820,36 @@ export default function App() {
 			}
 		} catch (err: any) {
 			setIsImproving(false);
-			const errorMessage = err.message || t('errors.extractionFailed');
+			setRetryAttempt(0);
+
 			const errorStack = err.stack || '';
 			const errorName = err.name || 'Error';
-			const formattedDetails = `${errorName}: ${errorMessage}${errorStack ? `\n\nStack trace:\n${errorStack}` : ''}`;
-			const isCommunicationErr = Boolean(err.isCommunicationError);
+
+			// Check if it's a timeout error (indicates slow connection or API issues)
+			const isTimeoutErr = err instanceof TimeoutError || err.name === 'TimeoutError';
+
+			// Check if it's a network/connection error
+			const isNetworkErr =
+				err.message?.toLowerCase().includes('network') ||
+				err.message?.toLowerCase().includes('fetch') ||
+				err.message?.toLowerCase().includes('connection') ||
+				err.name === 'TypeError';
+
+			// Determine the appropriate error message
+			let errorMessage: string;
+			let isCommunicationErr = Boolean(err.isCommunicationError);
+
+			if (isTimeoutErr) {
+				errorMessage = t('errors.timeout');
+				isCommunicationErr = true; // Show reload option for timeout
+			} else if (isNetworkErr) {
+				errorMessage = t('errors.networkError');
+				isCommunicationErr = true; // Show reload option for network errors
+			} else {
+				errorMessage = err.message || t('errors.extractionFailed');
+			}
+
+			const formattedDetails = `${errorName}: ${err.message || 'Unknown error'}${errorStack ? `\n\nStack trace:\n${errorStack}` : ''}`;
 
 			if (err.message && err.message.includes('Requested entity was not found')) {
 				await clearUserApiKey();

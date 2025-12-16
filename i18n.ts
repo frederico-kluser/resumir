@@ -74,6 +74,8 @@ const resources = {
 				extractionFailed: 'Could not extract captions. Please ensure the video has captions enabled.',
 				communication: 'Could not communicate with the page. Try reloading.',
 				apiKeyInvalid: 'API Key invalid or project not found. Please connect again.',
+				timeout: 'The request took too long. Please check your connection and try again.',
+				networkError: 'Network error. Please check your internet connection and try again.',
 			},
 			result: {
 				answerTitle: 'Your Answer',
@@ -193,6 +195,8 @@ const resources = {
 				extractionFailed: 'No se pudieron extraer los subtítulos. Asegúrate de que estén habilitados.',
 				communication: 'No se pudo comunicar con la página. Inténtalo recargando.',
 				apiKeyInvalid: 'La clave API no es válida o el proyecto no existe. Vuelve a conectarte.',
+				timeout: 'La solicitud tardó demasiado. Verifica tu conexión e inténtalo de nuevo.',
+				networkError: 'Error de red. Verifica tu conexión a internet e inténtalo de nuevo.',
 			},
 			result: {
 				answerTitle: 'Tu respuesta',
@@ -312,6 +316,8 @@ const resources = {
 				extractionFailed: 'Não foi possível extrair as legendas. Verifique se estão ativadas.',
 				communication: 'Não foi possível se comunicar com a página. Tente recarregar.',
 				apiKeyInvalid: 'Chave API inválida ou projeto inexistente. Conecte novamente.',
+				timeout: 'A solicitação demorou muito. Verifique sua conexão e tente novamente.',
+				networkError: 'Erro de rede. Verifique sua conexão com a internet e tente novamente.',
 			},
 			result: {
 				answerTitle: 'Sua resposta',
@@ -431,6 +437,8 @@ const resources = {
 				extractionFailed: "Impossible d'extraire les sous-titres. Assurez-vous qu'ils sont activés.",
 				communication: "Impossible de communiquer avec la page. Essayez d'actualiser.",
 				apiKeyInvalid: 'Clé API invalide ou projet introuvable. Veuillez vous reconnecter.',
+				timeout: 'La requête a pris trop de temps. Vérifiez votre connexion et réessayez.',
+				networkError: 'Erreur réseau. Vérifiez votre connexion Internet et réessayez.',
 			},
 			result: {
 				answerTitle: 'Votre réponse',
@@ -549,6 +557,8 @@ const resources = {
 				extractionFailed: 'تعذر استخراج الترجمة. تأكد من تفعيلها.',
 				communication: 'تعذر الاتصال بالصفحة. جرّب إعادة التحميل.',
 				apiKeyInvalid: 'مفتاح API غير صالح أو أن المشروع غير موجود. يرجى إعادة الاتصال.',
+				timeout: 'استغرق الطلب وقتًا طويلاً. تحقق من اتصالك وحاول مرة أخرى.',
+				networkError: 'خطأ في الشبكة. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.',
 			},
 			result: {
 				answerTitle: 'إجابتك',
@@ -666,6 +676,8 @@ const resources = {
 				extractionFailed: '无法提取字幕。请确认视频已启用字幕。',
 				communication: '无法与页面通信，请尝试刷新。',
 				apiKeyInvalid: 'API 密钥无效或项目不存在。请重新连接。',
+				timeout: '请求超时。请检查网络连接后重试。',
+				networkError: '网络错误。请检查互联网连接后重试。',
 			},
 			result: {
 				answerTitle: '你的答案',
@@ -785,6 +797,8 @@ const resources = {
 				extractionFailed: 'उपशीर्षक निकाल नहीं पाए। सुनिश्चित करें कि वे सक्षम हैं।',
 				communication: 'पेज से संचार नहीं हो पाया। कृपया रिफ्रेश करें।',
 				apiKeyInvalid: 'API कुंजी अमान्य है या प्रोजेक्ट नहीं मिला। कृपया दोबारा कनेक्ट करें।',
+				timeout: 'अनुरोध में बहुत समय लगा। कृपया अपना कनेक्शन जांचें और पुनः प्रयास करें।',
+				networkError: 'नेटवर्क त्रुटि। कृपया अपना इंटरनेट कनेक्शन जांचें और पुनः प्रयास करें।',
 			},
 			result: {
 				answerTitle: 'आपका उत्तर',
@@ -904,6 +918,8 @@ const resources = {
 				extractionFailed: 'সাবটাইটেল বের করা যায়নি। নিশ্চিত করুন যে সেগুলি চালু আছে।',
 				communication: 'পাতার সঙ্গে যোগাযোগ করা যায়নি। আবার লোড করে দেখুন।',
 				apiKeyInvalid: 'API কী অবৈধ বা প্রকল্প পাওয়া যায়নি। দয়া করে আবার সংযুক্ত করুন।',
+				timeout: 'অনুরোধে অনেক সময় লেগেছে। আপনার সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।',
+				networkError: 'নেটওয়ার্ক ত্রুটি। আপনার ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।',
 			},
 			result: {
 				answerTitle: 'আপনার উত্তর',
@@ -1022,6 +1038,8 @@ const resources = {
 				extractionFailed: 'Не удалось получить субтитры. Убедитесь, что они включены.',
 				communication: 'Не удалось связаться со страницей. Попробуйте обновить.',
 				apiKeyInvalid: 'Ключ API недействителен или проект не найден. Подключитесь снова.',
+				timeout: 'Запрос занял слишком много времени. Проверьте соединение и попробуйте снова.',
+				networkError: 'Ошибка сети. Проверьте подключение к Интернету и попробуйте снова.',
 			},
 			result: {
 				answerTitle: 'Ваш ответ',
@@ -1141,6 +1159,8 @@ const resources = {
 				extractionFailed: 'Tidak dapat mengambil teks. Pastikan teks diaktifkan.',
 				communication: 'Tidak dapat berkomunikasi dengan halaman. Coba muat ulang.',
 				apiKeyInvalid: 'Kunci API tidak valid atau proyek tidak ditemukan. Hubungkan lagi.',
+				timeout: 'Permintaan memakan waktu terlalu lama. Periksa koneksi Anda dan coba lagi.',
+				networkError: 'Kesalahan jaringan. Periksa koneksi internet Anda dan coba lagi.',
 			},
 			result: {
 				answerTitle: 'Jawaban Anda',
