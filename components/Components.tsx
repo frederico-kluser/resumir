@@ -33,18 +33,28 @@ export const Button: React.FC<ButtonProps> = ({ children, isLoading, className =
   );
 };
 
-export const Card: React.FC<{ children: React.ReactNode; title?: string; icon?: React.ReactNode; className?: string }> = ({
+export const Card: React.FC<{
+  children: React.ReactNode;
+  title?: string;
+  icon?: React.ReactNode;
+  className?: string;
+  headerAction?: React.ReactNode;
+}> = ({
   children,
   title,
   icon,
-  className = ""
+  className = "",
+  headerAction
 }) => (
   <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 ${className}`}>
     {title && (
-      <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 uppercase tracking-wide mb-3 flex items-center gap-2">
-        {icon}
-        {title}
-      </h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 uppercase tracking-wide flex items-center gap-2">
+          {icon}
+          {title}
+        </h3>
+        {headerAction}
+      </div>
     )}
     <div className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">
       {children}
