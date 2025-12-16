@@ -15,7 +15,8 @@
     "https://www.youtube.com/*",
     "https://generativelanguage.googleapis.com/*",
     "https://chat.deepseek.com/*",
-    "https://chatgpt.com/*"
+    "https://chatgpt.com/*",
+    "https://gemini.google.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -55,6 +56,15 @@
       ],
       "js": [
         "chatgptContent.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://gemini.google.com/*"
+      ],
+      "js": [
+        "geminiContent.js"
       ],
       "run_at": "document_idle"
     }

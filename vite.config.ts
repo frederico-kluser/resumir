@@ -55,6 +55,7 @@ export default defineConfig({
         content: resolve(__dirname, 'content.ts'),
         deepseekContent: resolve(__dirname, 'deepseekContent.ts'),
         chatgptContent: resolve(__dirname, 'chatgptContent.ts'),
+        geminiContent: resolve(__dirname, 'geminiContent.ts'),
       },
       output: {
         entryFileNames: '[name].js',
