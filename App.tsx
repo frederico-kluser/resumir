@@ -62,7 +62,7 @@ const PROVIDER_CONFIG: Record<LLMProvider, ProviderConfig> = {
 const DEFAULT_PROVIDER: LLMProvider = 'google';
 
 // Timeout and retry configuration for initial summary generation
-const SUMMARY_TIMEOUT_MS = 10000; // 10 seconds
+const SUMMARY_TIMEOUT_MS = 45000; // 45 seconds (gives slower providers room before failing)
 const MAX_RETRY_ATTEMPTS = 3; // Total attempts (1 original + 2 retries)
 
 declare var chrome: any;
@@ -205,9 +205,12 @@ export default function App() {
 	const [offlineStatus, setOfflineStatus] = useState<string | null>(null);
 	const [isOfflineLoading, setIsOfflineLoading] = useState(false);
 	const [retryAttempt, setRetryAttempt] = useState(0);
+	const [canManualRetry, setCanManualRetry] = useState(false);
 	const [offlineMode, setOfflineMode] = useState(false);
 
 	const inputRef = useRef<HTMLTextAreaElement>(null);
+	const manualRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const activeRequestTokenRef = useRef<{ cancelled: boolean } | null>(null);
 
 	const selectedLanguageOption = LANGUAGE_OPTIONS.find((option) => option.code === language) ?? LANGUAGE_OPTIONS[0];
 	const apiKey = credentials?.key ?? null;
@@ -307,6 +310,13 @@ export default function App() {
 
 		return () => {
 			active = false;
+		};
+	}, []);
+
+	useEffect(() => {
+		return () => {
+			cancelActiveRequest();
+			clearManualRetryTimer();
 		};
 	}, []);
 
@@ -585,6 +595,29 @@ export default function App() {
 		}
 	};
 
+	const cancelActiveRequest = () => {
+		if (activeRequestTokenRef.current) {
+			activeRequestTokenRef.current.cancelled = true;
+		}
+	};
+
+	const clearManualRetryTimer = () => {
+		if (manualRetryTimerRef.current) {
+			clearTimeout(manualRetryTimerRef.current);
+			manualRetryTimerRef.current = null;
+		}
+		setCanManualRetry(false);
+	};
+
+	const scheduleManualRetryTimer = (token: { cancelled: boolean }) => {
+		clearManualRetryTimer();
+		manualRetryTimerRef.current = setTimeout(() => {
+			if (!token.cancelled) {
+				setCanManualRetry(true);
+			}
+		}, 20000);
+	};
+
 	const handleOfflineSummarize = async (service: 'deepseek' | 'chatgpt' | 'gemini') => {
 		setIsOfflineLoading(true);
 		setOfflineStatus(t('offline.extractingTranscript'));
@@ -684,6 +717,12 @@ export default function App() {
 			handleLanguageAwareError(t('errors.apiKeyMissing'), 'API Key is not configured');
 			return;
 		}
+
+		cancelActiveRequest();
+		const requestToken = { cancelled: false };
+		activeRequestTokenRef.current = requestToken;
+		setCanManualRetry(false);
+		scheduleManualRetryTimer(requestToken);
 
 		setStatus(AppState.LOADING);
 		setError(null);
@@ -821,9 +860,15 @@ export default function App() {
 			// Reset retry counter on success
 			setRetryAttempt(0);
 
+			if (requestToken.cancelled) {
+				clearManualRetryTimer();
+				return;
+			}
+
 			// Show initial result immediately
 			setResult(initialResult);
 			setStatus(AppState.SUCCESS);
+			clearManualRetryTimer();
 
 			// Start improvement phase in background
 			setIsImproving(true);
@@ -836,6 +881,11 @@ export default function App() {
 					selectedLanguageOption,
 				);
 
+				if (requestToken.cancelled) {
+					setIsImproving(false);
+					return;
+				}
+
 				// Update with improved result
 				setResult(improvedResult);
 
@@ -847,6 +897,11 @@ export default function App() {
 					});
 				}
 			} catch (improvementError) {
+				if (requestToken.cancelled) {
+					setIsImproving(false);
+					return;
+				}
+
 				// If improvement fails, keep the initial result and save it
 				console.warn('Improvement failed, keeping initial result:', improvementError);
 				const videoId = extractVideoId(currentVideoUrl);
@@ -856,11 +911,19 @@ export default function App() {
 					});
 				}
 			} finally {
-				setIsImproving(false);
+				if (!requestToken.cancelled) {
+					setIsImproving(false);
+				}
 			}
 		} catch (err: any) {
+			if (requestToken.cancelled) {
+				clearManualRetryTimer();
+				return;
+			}
+
 			setIsImproving(false);
 			setRetryAttempt(0);
+			clearManualRetryTimer();
 
 			const errorStack = err.stack || '';
 			const errorName = err.name || 'Error';
@@ -1363,6 +1426,18 @@ export default function App() {
 					)}
 
 					<LoadingStatus isActive={status === AppState.LOADING} transcriptLength={transcriptLength} />
+
+					{status === AppState.LOADING && canManualRetry && (
+						<div className="mt-3 flex flex-col items-center gap-2 animate-fade-in">
+							<p className="text-xs text-gray-500 dark:text-gray-400 text-center">{t('loading.delayedHint')}</p>
+							<button
+								onClick={handleSummarize}
+								className="px-4 py-2 text-sm font-medium rounded-lg border border-brand-200 dark:border-brand-700 text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-900/30 transition-colors"
+							>
+								{t('loading.retryCta')}
+							</button>
+						</div>
+					)}
 				</div>
 
 				{status === AppState.SUCCESS && result && (

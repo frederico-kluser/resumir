@@ -119,6 +119,8 @@ const resources = {
 				polishingResult: 'Polishing the result...',
 				almostThere: 'Almost there...',
 				finalTouches: 'Adding final touches...',
+				delayedHint: 'It’s taking a bit longer than usual. You can retry whenever you want.',
+				retryCta: 'Retry now',
 			},
 			errorModal: {
 				title: 'Something went wrong',
@@ -259,6 +261,8 @@ const resources = {
 				polishingResult: 'Puliendo el resultado...',
 				almostThere: 'Ya casi está...',
 				finalTouches: 'Añadiendo toques finales...',
+				delayedHint: 'Está tardando más de lo habitual. Si prefieres, vuelve a intentarlo.',
+				retryCta: 'Reintentar ahora',
 			},
 			errorModal: {
 				title: 'Algo salió mal',
@@ -399,6 +403,8 @@ const resources = {
 				polishingResult: 'Polindo o resultado...',
 				almostThere: 'Quase lá...',
 				finalTouches: 'Adicionando toques finais...',
+				delayedHint: 'Está levando mais tempo que o normal. Se preferir, tente novamente.',
+				retryCta: 'Tentar novamente',
 			},
 			errorModal: {
 				title: 'Algo deu errado',
