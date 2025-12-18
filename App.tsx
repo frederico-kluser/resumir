@@ -7,7 +7,7 @@ import { ErrorModal } from './components/ErrorModal';
 import { Toast } from './components/Toast';
 import { ThemeSelector } from './components/ThemeSelector';
 import { useTheme } from './hooks/useTheme';
-import { analyzeVideo, answerUserQuestion, improveResult } from './services/geminiService';
+import { analyzeVideo, answerUserQuestion, improveResult, validateProviderCredentials } from './services/geminiService';
 import { getUserApiKey, saveUserApiKey, clearUserApiKey } from './services/apiKeyStorage';
 import { getSummary, saveSummary, extractVideoId, StoredSummary } from './services/summaryStorage';
 import { buildOfflinePrompt, storePendingPrompt, copyToClipboard, openDeepSeekChat, openChatGPT, openGeminiChat, storePendingPromptForService } from './services/offlinePromptService';
@@ -36,8 +36,8 @@ const PROVIDER_CONFIG: Record<LLMProvider, ProviderConfig> = {
   openai: {
     label: 'OpenAI GPT-4o mini',
     helper: 'High uptime and broad compatibility with OpenAI tooling.',
-    sample: 'e.g., sk-abc123...',
-    pattern: /^sk-[A-Za-z0-9]{20,}$/,
+    sample: 'e.g., sk-proj-xyz or sk-live-abc',
+    pattern: /^sk-[A-Za-z0-9-]{20,}$/,
   },
   anthropic: {
     label: 'Anthropic Claude 3.5',
@@ -443,6 +443,7 @@ export default function App() {
 		}
 
 		const payload: ApiCredentials = { provider, key: trimmed };
+		await validateProviderCredentials(payload);
 		await saveUserApiKey(payload);
 		setCredentials(payload);
 		setSelectedProvider(provider);
@@ -562,7 +563,8 @@ export default function App() {
 			setApiKeyInput('');
 		} catch (err) {
 			console.error('Failed to save API key', err);
-			setKeySetupError(t('auth.saveError'));
+			const errMsg = err instanceof Error && err.message ? err.message : t('auth.saveError');
+			setKeySetupError(errMsg);
 		} finally {
 			setSavingKey(false);
 		}

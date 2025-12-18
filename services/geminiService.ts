@@ -19,9 +19,9 @@ import {
 let lastAnalysisPrompt = '';
 
 const DEFAULT_MODELS: Record<LLMProvider, string> = {
-  google: 'gemini-2.0-flash',
-  openai: 'gpt-4o-mini',
-  anthropic: 'claude-3-5-haiku-20241022',
+  google: 'gemini-2.5-flash',
+  openai: 'o4-mini',
+  anthropic: 'claude-sonnet-4-5-20250929',
   groq: 'llama-3.3-70b-versatile',
   deepseek: 'deepseek-chat',
 };
@@ -142,6 +142,42 @@ const invokeModelForJson = async <T>(llm: BaseChatModel, prompt: string, context
     throw new Error(`${context} returned an empty response`);
   }
   return parseJsonContent<T>(raw, context);
+};
+
+const mapProviderLabel = (provider: LLMProvider): string => {
+  switch (provider) {
+    case 'google':
+      return 'Google Gemini';
+    case 'openai':
+      return 'OpenAI';
+    case 'anthropic':
+      return 'Anthropic';
+    case 'groq':
+      return 'Groq';
+    case 'deepseek':
+      return 'DeepSeek';
+    default:
+      return provider;
+  }
+};
+
+export const validateProviderCredentials = async (credentials: ApiCredentials): Promise<void> => {
+  ensureCredentials(credentials);
+
+  try {
+    const llm = createLLM(credentials, {
+      temperature: 0,
+      maxTokens: 8,
+      maxRetries: 0,
+    });
+    const runnable = llm.pipe(new StringOutputParser());
+    await runnable.invoke('Respond with OK');
+  } catch (error) {
+    const providerLabel = mapProviderLabel(credentials.provider);
+    const message =
+      (error as Error)?.message?.trim() || `Unable to reach ${providerLabel}. Please verify the API key.`;
+    throw new Error(`${providerLabel}: ${message}`);
+  }
 };
 
 const sanitizeUserAnswer = (value: Partial<UserAnswerResult>): UserAnswerResult => {
