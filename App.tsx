@@ -6,19 +6,60 @@ import { LoadingStatus } from './components/LoadingStatus';
 import { ErrorModal } from './components/ErrorModal';
 import { Toast } from './components/Toast';
 import { ThemeSelector } from './components/ThemeSelector';
-import { AudioPlayButton } from './components/AudioPlayButton';
 import { useTheme } from './hooks/useTheme';
 import { analyzeVideo, answerUserQuestion, improveResult } from './services/geminiService';
 import { getUserApiKey, saveUserApiKey, clearUserApiKey } from './services/apiKeyStorage';
 import { getSummary, saveSummary, extractVideoId, StoredSummary } from './services/summaryStorage';
 import { buildOfflinePrompt, storePendingPrompt, copyToClipboard, openDeepSeekChat, openChatGPT, openGeminiChat, storePendingPromptForService } from './services/offlinePromptService';
 import { getFullTranscriptText } from './mockData';
-import { AnalysisResult, AppState } from './types';
+import { AnalysisResult, AppState, ApiCredentials, LLMProvider } from './types';
 import { LANGUAGE_OPTIONS } from './i18n';
 
 const LANGUAGE_STORAGE_KEY = 'tubegist.language';
 const OFFLINE_MODE_STORAGE_KEY = 'tubegist.offlineMode';
 const SUPPORTED_LANGUAGE_CODES = new Set(LANGUAGE_OPTIONS.map(({ code }) => code));
+
+interface ProviderConfig {
+  label: string;
+  helper: string;
+  sample: string;
+  pattern: RegExp;
+}
+
+const PROVIDER_CONFIG: Record<LLMProvider, ProviderConfig> = {
+  google: {
+    label: 'Google Gemini',
+    helper: 'Best cost/performance option with 1M-token context window.',
+    sample: 'e.g., AIzaSyC... or AIxxx...',
+    pattern: /^(AI[a-zA-Z0-9_-]{20,}|AIza[a-zA-Z0-9_-]{20,})$/,
+  },
+  openai: {
+    label: 'OpenAI GPT-4o mini',
+    helper: 'High uptime and broad compatibility with OpenAI tooling.',
+    sample: 'e.g., sk-abc123...',
+    pattern: /^sk-[A-Za-z0-9]{20,}$/,
+  },
+  anthropic: {
+    label: 'Anthropic Claude 3.5',
+    helper: 'Structured and safe answers with strong reasoning.',
+    sample: 'e.g., sk-ant-xxx...',
+    pattern: /^sk-ant-[A-Za-z0-9]{20,}$/,
+  },
+  groq: {
+    label: 'Groq Llama 3.3',
+    helper: 'Ultra fast for snappy UX when summarizing long videos.',
+    sample: 'e.g., gsk_abcd1234...',
+    pattern: /^gsk_[A-Za-z0-9]{20,}$/,
+  },
+  deepseek: {
+    label: 'DeepSeek V3/R1',
+    helper: 'Great low-cost models tuned for reasoning-heavy prompts.',
+    sample: 'e.g., sk-1234abcd...',
+    pattern: /^sk-[A-Za-z0-9]{32,}$/,
+  },
+};
+
+const DEFAULT_PROVIDER: LLMProvider = 'google';
 
 // Timeout and retry configuration for initial summary generation
 const SUMMARY_TIMEOUT_MS = 10000; // 10 seconds
@@ -141,7 +182,8 @@ export default function App() {
 	const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(null);
 	const [checkingTab, setCheckingTab] = useState(true);
 
-	const [apiKey, setApiKey] = useState<string | null>(null);
+	const [credentials, setCredentials] = useState<ApiCredentials | null>(null);
+	const [selectedProvider, setSelectedProvider] = useState<LLMProvider>(DEFAULT_PROVIDER);
 	const [apiKeyInput, setApiKeyInput] = useState('');
 	const [savingKey, setSavingKey] = useState(false);
 	const [keySetupError, setKeySetupError] = useState<string | null>(null);
@@ -160,7 +202,6 @@ export default function App() {
 	const [isCommunicationError, setIsCommunicationError] = useState(false);
 	const [isImproving, setIsImproving] = useState(false);
 	const [currentTranscript, setCurrentTranscript] = useState<string>('');
-	const [showAudioApiKeyModal, setShowAudioApiKeyModal] = useState(false);
 	const [offlineStatus, setOfflineStatus] = useState<string | null>(null);
 	const [isOfflineLoading, setIsOfflineLoading] = useState(false);
 	const [retryAttempt, setRetryAttempt] = useState(0);
@@ -169,6 +210,9 @@ export default function App() {
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 
 	const selectedLanguageOption = LANGUAGE_OPTIONS.find((option) => option.code === language) ?? LANGUAGE_OPTIONS[0];
+	const apiKey = credentials?.key ?? null;
+	const activeProvider = credentials?.provider ?? selectedProvider;
+	const activeProviderLabel = PROVIDER_CONFIG[activeProvider].label;
 
 	const handleLanguageChange = (nextCode: string) => {
 		const normalized = normalizeLanguage(nextCode) ?? 'en';
@@ -242,24 +286,13 @@ export default function App() {
 	useEffect(() => {
 		let active = true;
 
-		const loadKey = async () => {
+		const loadCredentials = async () => {
 			try {
 				const stored = await getUserApiKey();
 				if (!active) return;
 				if (stored) {
-					setApiKey(stored);
-					return;
-				}
-
-				if (window.aistudio?.getSelectedApiKey) {
-					const selected = await window.aistudio.getSelectedApiKey();
-					if (!active) return;
-					if (selected) {
-						await saveUserApiKey(selected);
-						if (!active) return;
-						setApiKey(selected);
-						return;
-					}
+					setCredentials(stored);
+					setSelectedProvider(stored.provider);
 				}
 			} catch (e) {
 				console.error('Failed to check API key', e);
@@ -270,7 +303,7 @@ export default function App() {
 			}
 		};
 
-		loadKey();
+		loadCredentials();
 
 		return () => {
 			active = false;
@@ -403,15 +436,26 @@ export default function App() {
 		};
 	}, [isYoutube, currentTabId, currentVideoUrl]);
 
-	const persistApiKey = async (key: string) => {
+	const persistApiKey = async (provider: LLMProvider, key: string) => {
 		const trimmed = key.trim();
 		if (!trimmed) {
 			throw new Error(t('auth.errorMissing'));
 		}
-		await saveUserApiKey(trimmed);
-		setApiKey(trimmed);
+
+		const payload: ApiCredentials = { provider, key: trimmed };
+		await saveUserApiKey(payload);
+		setCredentials(payload);
+		setSelectedProvider(provider);
 		setKeySetupError(null);
 		setKeySetupSuccess(t('auth.successMessage'));
+	};
+
+	const validateApiKeyFormat = (provider: LLMProvider, key: string) => {
+		const pattern = PROVIDER_CONFIG[provider].pattern;
+		if (!pattern.test(key.trim())) {
+			return t('auth.invalidKey', { provider: PROVIDER_CONFIG[provider].label });
+		}
+		return null;
 	};
 
 	const handleLanguageAwareError = (message: string, details?: string, communicationError = false) => {
@@ -497,38 +541,6 @@ export default function App() {
 		}
 	};
 
-	const handleConnectGoogle = async () => {
-		try {
-			setKeySetupError(null);
-			setKeySetupSuccess(null);
-
-			if (window.aistudio) {
-				const maybeResult = await window.aistudio.openSelectKey();
-				const selectedKey =
-					(typeof maybeResult === 'string' && maybeResult) ||
-					(await window.aistudio.getSelectedApiKey?.()) ||
-					window.aistudio.selectedApiKey ||
-					null;
-
-				if (selectedKey) {
-					await persistApiKey(selectedKey);
-					return;
-				}
-
-				const hasKey = await window.aistudio.hasSelectedApiKey();
-				if (!hasKey) {
-					setKeySetupError(t('auth.selectKeyPrompt'));
-				}
-				return;
-			}
-
-			window.open('https://aistudio.google.com/app/apikey', '_blank', 'noopener');
-		} catch (e) {
-			console.error('Selection failed', e);
-			setKeySetupError(t('auth.connectError'));
-		}
-	};
-
 	const handleSaveApiKey = async () => {
 		setKeySetupError(null);
 		setKeySetupSuccess(null);
@@ -538,9 +550,15 @@ export default function App() {
 			return;
 		}
 
+		const validationMessage = validateApiKeyFormat(selectedProvider, apiKeyInput);
+		if (validationMessage) {
+			setKeySetupError(validationMessage);
+			return;
+		}
+
 		try {
 			setSavingKey(true);
-			await persistApiKey(apiKeyInput);
+			await persistApiKey(selectedProvider, apiKeyInput);
 			setApiKeyInput('');
 		} catch (err) {
 			console.error('Failed to save API key', err);
@@ -556,7 +574,7 @@ export default function App() {
 		} catch (err) {
 			console.error('Failed to clear API key', err);
 		} finally {
-			setApiKey(null);
+			setCredentials(null);
 			setKeySetupSuccess(null);
 			setKeySetupError(null);
 			setStatus(AppState.IDLE);
@@ -660,7 +678,7 @@ export default function App() {
 	};
 
 	const handleSummarize = async () => {
-		if (!apiKey) {
+		if (!credentials || !apiKey) {
 			handleLanguageAwareError(t('errors.apiKeyMissing'), 'API Key is not configured');
 			return;
 		}
@@ -766,14 +784,14 @@ export default function App() {
 				// Both wrapped with timeout and retry logic
 				const [userAnswerResult, analysisResult] = await Promise.all([
 					withTimeoutAndRetry(
-						() => answerUserQuestion(transcriptText, trimmedQuery, apiKey, selectedLanguageOption),
+						() => answerUserQuestion(transcriptText, trimmedQuery, credentials, selectedLanguageOption),
 						SUMMARY_TIMEOUT_MS,
 						MAX_RETRY_ATTEMPTS,
 						'User question analysis',
 						handleRetry,
 					),
 					withTimeoutAndRetry(
-						() => analyzeVideo(transcriptText, apiKey, selectedLanguageOption),
+						() => analyzeVideo(transcriptText, credentials, selectedLanguageOption),
 						SUMMARY_TIMEOUT_MS,
 						MAX_RETRY_ATTEMPTS,
 						'Video analysis',
@@ -790,7 +808,7 @@ export default function App() {
 			} else {
 				// No question: just summarize with timeout and retry
 				initialResult = await withTimeoutAndRetry(
-					() => analyzeVideo(transcriptText, apiKey, selectedLanguageOption),
+					() => analyzeVideo(transcriptText, credentials, selectedLanguageOption),
 					SUMMARY_TIMEOUT_MS,
 					MAX_RETRY_ATTEMPTS,
 					'Video analysis',
@@ -812,7 +830,7 @@ export default function App() {
 				const improvedResult = await improveResult(
 					initialResult,
 					transcriptText,
-					apiKey,
+					credentials,
 					selectedLanguageOption,
 				);
 
@@ -871,9 +889,12 @@ export default function App() {
 
 			const formattedDetails = `${errorName}: ${err.message || 'Unknown error'}${errorStack ? `\n\nStack trace:\n${errorStack}` : ''}`;
 
-			if (err.message && err.message.includes('Requested entity was not found')) {
+			const loweredMessage = err.message?.toLowerCase() ?? '';
+			const authErrorPatterns = ['requested entity was not found', 'invalid api key', 'unauthorized', 'permission', 'authentication'];
+
+			if (loweredMessage && authErrorPatterns.some((pattern) => loweredMessage.includes(pattern))) {
 				await clearUserApiKey();
-				setApiKey(null);
+				setCredentials(null);
 				setKeySetupSuccess(null);
 				handleLanguageAwareError(t('errors.apiKeyInvalid'), formattedDetails, false);
 			} else {
@@ -969,32 +990,30 @@ export default function App() {
 					<h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">{t('auth.welcomeTitle')}</h2>
 					<p className="text-gray-500 dark:text-gray-400 text-sm mb-8">{t('auth.description')}</p>
 
-					<div className="space-y-2">
-						<button
-							onClick={handleConnectGoogle}
-							className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium rounded-lg border border-gray-300 dark:border-gray-600 transition-all shadow-sm group"
+					<div className="space-y-2 text-left">
+						<label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">{t('auth.providerLabel')}</label>
+						<select
+							value={selectedProvider}
+							onChange={(event) => {
+								const provider = event.target.value as LLMProvider;
+								setSelectedProvider(provider);
+								setKeySetupError(null);
+								setKeySetupSuccess(null);
+							}}
+							className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
 						>
-							<svg className="w-5 h-5" viewBox="0 0 24 24">
-								<path
-									fill="#4285F4"
-									d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-								/>
-								<path
-									fill="#34A853"
-									d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-								/>
-								<path
-									fill="#FBBC05"
-									d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.26-.19-.58z"
-								/>
-								<path
-									fill="#EA4335"
-									d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-								/>
-							</svg>
-							<span>{t('auth.googleButton')}</span>
-						</button>
-						<p className="text-[11px] text-gray-400 dark:text-gray-500">{t('auth.googleHelper')}</p>
+							{(Object.keys(PROVIDER_CONFIG) as LLMProvider[]).map((provider) => (
+								<option key={provider} value={provider}>
+									{PROVIDER_CONFIG[provider].label}
+								</option>
+							))}
+						</select>
+						<p className="text-[11px] text-gray-400 dark:text-gray-500">
+							{PROVIDER_CONFIG[selectedProvider].helper}
+						</p>
+						<p className="text-[11px] text-gray-400 dark:text-gray-500">
+							{t('auth.sampleKeyLabel')} {PROVIDER_CONFIG[selectedProvider].sample}
+						</p>
 					</div>
 
 					<div className="mt-6 text-left space-y-2">
@@ -1003,7 +1022,7 @@ export default function App() {
 							type="password"
 							value={apiKeyInput}
 							onChange={(e) => setApiKeyInput(e.target.value)}
-							placeholder={t('auth.placeholder') ?? ''}
+							placeholder={t(PROVIDER_CONFIG[selectedProvider].sampleKey)}
 							className="w-full px-4 py-2.5 text-sm bg-white dark:bg-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
 						/>
 						<button
@@ -1182,32 +1201,6 @@ export default function App() {
 				onRetry={handleRetryFromError}
 				onReload={isCommunicationError ? handleReloadPage : undefined}
 			/>
-
-			{/* Audio API Key Required Modal */}
-			{showAudioApiKeyModal && (
-				<div className="absolute inset-0 z-50 bg-gray-900/40 dark:bg-gray-950/60 backdrop-blur-[2px] flex items-center justify-center p-6 animate-fade-in">
-					<div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-6 text-center max-w-sm w-full transform transition-all scale-100">
-						<div className="mx-auto w-14 h-14 bg-amber-50 dark:bg-amber-900/30 text-amber-500 dark:text-amber-400 rounded-full flex items-center justify-center mb-4 ring-8 ring-amber-50/50 dark:ring-amber-900/30">
-							<svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth="2"
-									d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.536a5 5 0 001.414 1.414m2.828-9.9a9 9 0 0112.728 0"
-								/>
-							</svg>
-						</div>
-						<h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">{t('audio.noApiKeyTitle')}</h3>
-						<p className="text-gray-500 dark:text-gray-400 text-sm mb-6 leading-relaxed">{t('audio.noApiKeyDescription')}</p>
-						<button
-							onClick={() => setShowAudioApiKeyModal(false)}
-							className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white rounded-lg font-medium transition-colors text-sm shadow-sm"
-						>
-							{t('errorModal.close')}
-						</button>
-					</div>
-				</div>
-			)}
 
 			<header
 				className={`sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-4 py-3 shadow-sm flex flex-col gap-2 md:flex-row md:items-center md:justify-between transition-opacity ${
@@ -1413,55 +1406,42 @@ export default function App() {
 						)}
 
 						{result.customAnswer && (
-							<Card
-								className="border-brand-200 dark:border-brand-800 bg-brand-50/50 dark:bg-brand-900/20"
-								title={t('result.answerTitle')}
-								icon={
-									<svg className="w-4 h-4 text-brand-600 dark:text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-										<path
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth="2"
-											d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-										/>
-									</svg>
-								}
-								headerAction={
-									<AudioPlayButton
-										text={result.customAnswer.text}
-										apiKey={apiKey}
-										onNoApiKey={() => setShowAudioApiKeyModal(true)}
-									/>
-								}
-							>
-								<p className="text-gray-900 dark:text-gray-100 font-medium mb-3">{result.customAnswer.text}</p>
-								{result.customAnswer.relatedSegments && result.customAnswer.relatedSegments.length > 0 && (
-									<div className="flex flex-wrap gap-2">
-										{result.customAnswer.relatedSegments.map((seg, idx) => (
-											<TimestampBadge key={idx} time={seg} onSelect={seekToVideoTime} />
-										))}
-									</div>
-								)}
-							</Card>
-						)}
-
-						<Card
-							title={t('result.summaryTitle')}
-							icon={
-								<svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7" />
-								</svg>
-							}
-							headerAction={
-								<AudioPlayButton
-									text={result.summary}
-									apiKey={apiKey}
-									onNoApiKey={() => setShowAudioApiKeyModal(true)}
+					<Card
+						className="border-brand-200 dark:border-brand-800 bg-brand-50/50 dark:bg-brand-900/20"
+						title={t('result.answerTitle')}
+						icon={
+							<svg className="w-4 h-4 text-brand-600 dark:text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth="2"
+									d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
 								/>
-							}
-						>
-							{result.summary}
-						</Card>
+							</svg>
+						}
+					>
+						<p className="text-gray-900 dark:text-gray-100 font-medium mb-3">{result.customAnswer.text}</p>
+						{result.customAnswer.relatedSegments && result.customAnswer.relatedSegments.length > 0 && (
+							<div className="flex flex-wrap gap-2">
+								{result.customAnswer.relatedSegments.map((seg, idx) => (
+									<TimestampBadge key={idx} time={seg} onSelect={seekToVideoTime} />
+								))}
+							</div>
+						)}
+					</Card>
+				)}
+
+				<Card
+					title={t('result.summaryTitle')}
+					icon={
+						<svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7" />
+						</svg>
+					}
+				>
+					{result.summary}
+				</Card>
+
 
 						<Card
 							title={t('result.keyMomentsTitle')}

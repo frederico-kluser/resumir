@@ -4,7 +4,7 @@
 
 **Summarize YouTube videos with Artificial Intelligence**
 
-[![Version](https://img.shields.io/badge/Version-1.0.2-blue.svg)](https://github.com/user/resumir/releases)
+[![Version](https://img.shields.io/badge/Version-1.0.3-blue.svg)](https://github.com/user/resumir/releases)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 [![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-green?logo=googlechrome&logoColor=white)](https://chrome.google.com/webstore)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev)
@@ -54,7 +54,7 @@
 | **UI / Side Panel** | `App.tsx`, `components/*` | React interface rendered as extension side panel |
 | **Background** | `background.ts` | Service worker managing states and permissions |
 | **Content Script** | `content.ts` | Injects code into YouTube to extract transcripts and control the player |
-| **AI Service** | `services/geminiService.ts` | Integration with Gemini API for content analysis |
+| **AI Service** | `services/geminiService.ts` | LangChain multi-provider orchestrator (Gemini/OpenAI/Anthropic/Groq/DeepSeek) |
 | **Storage** | `services/apiKeyStorage.ts` | Manages API key securely and locally |
 | **Internationalization** | `i18n.ts` | Complete translation setup for 10 languages |
 

@@ -10,6 +10,13 @@ export interface LanguageOption {
   flag: string;
 }
 
+export type LLMProvider = 'google' | 'openai' | 'anthropic' | 'groq' | 'deepseek';
+
+export interface ApiCredentials {
+  provider: LLMProvider;
+  key: string;
+}
+
 export interface Citation {
   start: number;
   end: number;
