@@ -23,7 +23,6 @@ interface ProviderConfig {
   label: string;
   helper: string;
   sample: string;
-  pattern: RegExp;
 }
 
 const PROVIDER_CONFIG: Record<LLMProvider, ProviderConfig> = {
@@ -31,31 +30,26 @@ const PROVIDER_CONFIG: Record<LLMProvider, ProviderConfig> = {
     label: 'Google Gemini',
     helper: 'Best cost/performance option with 1M-token context window.',
     sample: 'e.g., AIzaSyC... or AIxxx...',
-    pattern: /^(AI[a-zA-Z0-9_-]{20,}|AIza[a-zA-Z0-9_-]{20,})$/,
   },
   openai: {
     label: 'OpenAI GPT-4o mini',
     helper: 'High uptime and broad compatibility with OpenAI tooling.',
     sample: 'e.g., sk-proj-xyz or sk-live-abc',
-    pattern: /^sk-[A-Za-z0-9-]{20,}$/,
   },
   anthropic: {
     label: 'Anthropic Claude 3.5',
     helper: 'Structured and safe answers with strong reasoning.',
     sample: 'e.g., sk-ant-xxx...',
-    pattern: /^sk-ant-[A-Za-z0-9]{20,}$/,
   },
   groq: {
     label: 'Groq Llama 3.3',
     helper: 'Ultra fast for snappy UX when summarizing long videos.',
     sample: 'e.g., gsk_abcd1234...',
-    pattern: /^gsk_[A-Za-z0-9]{20,}$/,
   },
   deepseek: {
     label: 'DeepSeek V3/R1',
     helper: 'Great low-cost models tuned for reasoning-heavy prompts.',
     sample: 'e.g., sk-1234abcd...',
-    pattern: /^sk-[A-Za-z0-9]{32,}$/,
   },
 };
 
@@ -461,14 +455,6 @@ export default function App() {
 		setKeySetupSuccess(t('auth.successMessage'));
 	};
 
-	const validateApiKeyFormat = (provider: LLMProvider, key: string) => {
-		const pattern = PROVIDER_CONFIG[provider].pattern;
-		if (!pattern.test(key.trim())) {
-			return t('auth.invalidKey', { provider: PROVIDER_CONFIG[provider].label });
-		}
-		return null;
-	};
-
 	const handleLanguageAwareError = (message: string, details?: string, communicationError = false) => {
 		setStatus(AppState.ERROR);
 		setError(message);
@@ -558,12 +544,6 @@ export default function App() {
 
 		if (!apiKeyInput.trim()) {
 			setKeySetupError(t('auth.errorMissing'));
-			return;
-		}
-
-		const validationMessage = validateApiKeyFormat(selectedProvider, apiKeyInput);
-		if (validationMessage) {
-			setKeySetupError(validationMessage);
 			return;
 		}
 
