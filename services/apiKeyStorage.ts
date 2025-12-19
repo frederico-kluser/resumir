@@ -1,6 +1,39 @@
+import { ApiCredentials, LLMProvider } from '../types';
+
 const STORAGE_KEY = 'tubegist:gemini_api_key';
 
 declare const chrome: any;
+
+const FALLBACK_PROVIDER: LLMProvider = 'google';
+
+const serializeCredentials = (value: ApiCredentials): string => JSON.stringify(value);
+
+const parseStoredCredentials = (raw: string | null): ApiCredentials | null => {
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.key === 'string') {
+      const provider = typeof parsed.provider === 'string' ? (parsed.provider as LLMProvider) : FALLBACK_PROVIDER;
+      return { provider, key: parsed.key };
+    }
+
+    if (!raw.trim().startsWith('{')) {
+      return { provider: FALLBACK_PROVIDER, key: raw };
+    }
+  } catch {
+    // Legacy format: raw string stored directly
+    return { provider: FALLBACK_PROVIDER, key: raw };
+  }
+
+  if (!raw.trim().startsWith('{')) {
+    return { provider: FALLBACK_PROVIDER, key: raw };
+  }
+
+  return null;
+};
 
 type StorageResolver = (value?: string | null) => void;
 
@@ -41,28 +74,37 @@ function setChromeStorage(value: string | null): Promise<void> {
   });
 }
 
-export async function getUserApiKey(): Promise<string | null> {
+export async function getUserApiKey(): Promise<ApiCredentials | null> {
   try {
+    let raw: string | null = null;
+
     if (hasChromeStorage) {
-      return await getFromChromeStorage();
+      raw = await getFromChromeStorage();
+    } else if (hasLocalStorage) {
+      raw = window.localStorage.getItem(STORAGE_KEY);
     }
-    if (hasLocalStorage) {
-      return window.localStorage.getItem(STORAGE_KEY);
-    }
+
+    return parseStoredCredentials(raw);
   } catch (error) {
     console.error('Failed to load stored API key', error);
   }
   return null;
 }
 
-export async function saveUserApiKey(key: string): Promise<void> {
-  const trimmed = key.trim();
+export async function saveUserApiKey(credentials: ApiCredentials): Promise<void> {
+  const trimmed = credentials.key.trim();
   if (!trimmed) {
     throw new Error('API key cannot be empty');
   }
 
+  const payload: ApiCredentials = {
+    provider: credentials.provider,
+    key: trimmed,
+  };
+  const serialized = serializeCredentials(payload);
+
   if (hasChromeStorage) {
-    await setChromeStorage(trimmed);
+    await setChromeStorage(serialized);
     return;
   }
 
@@ -70,7 +112,7 @@ export async function saveUserApiKey(key: string): Promise<void> {
     throw new Error('No storage mechanism available');
   }
 
-  window.localStorage.setItem(STORAGE_KEY, trimmed);
+  window.localStorage.setItem(STORAGE_KEY, serialized);
 }
 
 export async function clearUserApiKey(): Promise<void> {

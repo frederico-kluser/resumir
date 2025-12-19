@@ -1,27 +1,63 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Logo } from './components/Logo';
-import { Button, Card, TimestampBadge } from './components/Components';
+import { Button, Card, TimestampBadge, SpeakButton } from './components/Components';
+import { WelcomeModal, SummaryInstructionsModal, shouldShowOnboarding } from './components/OnboardingModal';
 import { LoadingStatus } from './components/LoadingStatus';
 import { ErrorModal } from './components/ErrorModal';
 import { Toast } from './components/Toast';
 import { ThemeSelector } from './components/ThemeSelector';
-import { AudioPlayButton } from './components/AudioPlayButton';
 import { useTheme } from './hooks/useTheme';
-import { analyzeVideo, answerUserQuestion, improveResult } from './services/geminiService';
+import { analyzeVideo, answerUserQuestion, validateProviderCredentials } from './services/geminiService';
 import { getUserApiKey, saveUserApiKey, clearUserApiKey } from './services/apiKeyStorage';
 import { getSummary, saveSummary, extractVideoId, StoredSummary } from './services/summaryStorage';
 import { buildOfflinePrompt, storePendingPrompt, copyToClipboard, openDeepSeekChat, openChatGPT, openGeminiChat, storePendingPromptForService } from './services/offlinePromptService';
 import { getFullTranscriptText } from './mockData';
-import { AnalysisResult, AppState } from './types';
+import { AnalysisResult, AppState, ApiCredentials, LLMProvider } from './types';
 import { LANGUAGE_OPTIONS } from './i18n';
 
 const LANGUAGE_STORAGE_KEY = 'tubegist.language';
 const OFFLINE_MODE_STORAGE_KEY = 'tubegist.offlineMode';
 const SUPPORTED_LANGUAGE_CODES = new Set(LANGUAGE_OPTIONS.map(({ code }) => code));
 
+interface ProviderConfig {
+  label: string;
+  helper: string;
+  sample: string;
+}
+
+const PROVIDER_CONFIG: Record<LLMProvider, ProviderConfig> = {
+  google: {
+    label: 'Google Gemini',
+    helper: 'Best cost/performance option with 1M-token context window.',
+    sample: 'e.g., AIzaSyC... or AIxxx...',
+  },
+  openai: {
+    label: 'OpenAI GPT-4.1 mini',
+    helper: 'High uptime and broad compatibility with OpenAI tooling.',
+    sample: 'e.g., sk-proj-xyz or sk-live-abc',
+  },
+  anthropic: {
+    label: 'Anthropic Claude 3.5',
+    helper: 'Structured and safe answers with strong reasoning.',
+    sample: 'e.g., sk-ant-xxx...',
+  },
+  groq: {
+    label: 'Groq Llama 3.3',
+    helper: 'Ultra fast for snappy UX when summarizing long videos.',
+    sample: 'e.g., gsk_abcd1234...',
+  },
+  deepseek: {
+    label: 'DeepSeek V3/R1',
+    helper: 'Great low-cost models tuned for reasoning-heavy prompts.',
+    sample: 'e.g., sk-1234abcd...',
+  },
+};
+
+const DEFAULT_PROVIDER: LLMProvider = 'google';
+
 // Timeout and retry configuration for initial summary generation
-const SUMMARY_TIMEOUT_MS = 10000; // 10 seconds
+const SUMMARY_TIMEOUT_MS = 45000; // 45 seconds (gives slower providers room before failing)
 const MAX_RETRY_ATTEMPTS = 3; // Total attempts (1 original + 2 retries)
 
 declare var chrome: any;
@@ -141,7 +177,8 @@ export default function App() {
 	const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(null);
 	const [checkingTab, setCheckingTab] = useState(true);
 
-	const [apiKey, setApiKey] = useState<string | null>(null);
+	const [credentials, setCredentials] = useState<ApiCredentials | null>(null);
+	const [selectedProvider, setSelectedProvider] = useState<LLMProvider>(DEFAULT_PROVIDER);
 	const [apiKeyInput, setApiKeyInput] = useState('');
 	const [savingKey, setSavingKey] = useState(false);
 	const [keySetupError, setKeySetupError] = useState<string | null>(null);
@@ -160,15 +197,24 @@ export default function App() {
 	const [isCommunicationError, setIsCommunicationError] = useState(false);
 	const [isImproving, setIsImproving] = useState(false);
 	const [currentTranscript, setCurrentTranscript] = useState<string>('');
-	const [showAudioApiKeyModal, setShowAudioApiKeyModal] = useState(false);
 	const [offlineStatus, setOfflineStatus] = useState<string | null>(null);
+
+	// Onboarding modals
+	const [showWelcomeModal, setShowWelcomeModal] = useState(() => shouldShowOnboarding('welcome'));
+	const [showSummaryModal, setShowSummaryModal] = useState(false);
 	const [isOfflineLoading, setIsOfflineLoading] = useState(false);
 	const [retryAttempt, setRetryAttempt] = useState(0);
+	const [canManualRetry, setCanManualRetry] = useState(false);
 	const [offlineMode, setOfflineMode] = useState(false);
 
 	const inputRef = useRef<HTMLTextAreaElement>(null);
+	const manualRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const activeRequestTokenRef = useRef<{ cancelled: boolean } | null>(null);
 
 	const selectedLanguageOption = LANGUAGE_OPTIONS.find((option) => option.code === language) ?? LANGUAGE_OPTIONS[0];
+	const apiKey = credentials?.key ?? null;
+	const activeProvider = credentials?.provider ?? selectedProvider;
+	const activeProviderLabel = PROVIDER_CONFIG[activeProvider].label;
 
 	const handleLanguageChange = (nextCode: string) => {
 		const normalized = normalizeLanguage(nextCode) ?? 'en';
@@ -242,24 +288,13 @@ export default function App() {
 	useEffect(() => {
 		let active = true;
 
-		const loadKey = async () => {
+		const loadCredentials = async () => {
 			try {
 				const stored = await getUserApiKey();
 				if (!active) return;
 				if (stored) {
-					setApiKey(stored);
-					return;
-				}
-
-				if (window.aistudio?.getSelectedApiKey) {
-					const selected = await window.aistudio.getSelectedApiKey();
-					if (!active) return;
-					if (selected) {
-						await saveUserApiKey(selected);
-						if (!active) return;
-						setApiKey(selected);
-						return;
-					}
+					setCredentials(stored);
+					setSelectedProvider(stored.provider);
 				}
 			} catch (e) {
 				console.error('Failed to check API key', e);
@@ -270,10 +305,17 @@ export default function App() {
 			}
 		};
 
-		loadKey();
+		loadCredentials();
 
 		return () => {
 			active = false;
+		};
+	}, []);
+
+	useEffect(() => {
+		return () => {
+			cancelActiveRequest();
+			clearManualRetryTimer();
 		};
 	}, []);
 
@@ -331,6 +373,14 @@ export default function App() {
 			inputRef.current.focus();
 		}
 	}, [isYoutube, apiKey]);
+
+	// 4. Show summary instructions modal when user reaches summarize screen
+	useEffect(() => {
+		// Show modal when: user has API key, is on YouTube, welcome modal is not showing, and hasn't dismissed it
+		if (apiKey && isYoutube && !showWelcomeModal && shouldShowOnboarding('summary-instructions')) {
+			setShowSummaryModal(true);
+		}
+	}, [apiKey, isYoutube, showWelcomeModal]);
 
 	// 4. Caption availability check + Load cached summary
 	// Note: currentVideoUrl is included in deps to re-check captions when navigating
@@ -403,13 +453,17 @@ export default function App() {
 		};
 	}, [isYoutube, currentTabId, currentVideoUrl]);
 
-	const persistApiKey = async (key: string) => {
+	const persistApiKey = async (provider: LLMProvider, key: string) => {
 		const trimmed = key.trim();
 		if (!trimmed) {
 			throw new Error(t('auth.errorMissing'));
 		}
-		await saveUserApiKey(trimmed);
-		setApiKey(trimmed);
+
+		const payload: ApiCredentials = { provider, key: trimmed };
+		await validateProviderCredentials(payload);
+		await saveUserApiKey(payload);
+		setCredentials(payload);
+		setSelectedProvider(provider);
 		setKeySetupError(null);
 		setKeySetupSuccess(t('auth.successMessage'));
 	};
@@ -497,38 +551,6 @@ export default function App() {
 		}
 	};
 
-	const handleConnectGoogle = async () => {
-		try {
-			setKeySetupError(null);
-			setKeySetupSuccess(null);
-
-			if (window.aistudio) {
-				const maybeResult = await window.aistudio.openSelectKey();
-				const selectedKey =
-					(typeof maybeResult === 'string' && maybeResult) ||
-					(await window.aistudio.getSelectedApiKey?.()) ||
-					window.aistudio.selectedApiKey ||
-					null;
-
-				if (selectedKey) {
-					await persistApiKey(selectedKey);
-					return;
-				}
-
-				const hasKey = await window.aistudio.hasSelectedApiKey();
-				if (!hasKey) {
-					setKeySetupError(t('auth.selectKeyPrompt'));
-				}
-				return;
-			}
-
-			window.open('https://aistudio.google.com/app/apikey', '_blank', 'noopener');
-		} catch (e) {
-			console.error('Selection failed', e);
-			setKeySetupError(t('auth.connectError'));
-		}
-	};
-
 	const handleSaveApiKey = async () => {
 		setKeySetupError(null);
 		setKeySetupSuccess(null);
@@ -540,11 +562,12 @@ export default function App() {
 
 		try {
 			setSavingKey(true);
-			await persistApiKey(apiKeyInput);
+			await persistApiKey(selectedProvider, apiKeyInput);
 			setApiKeyInput('');
 		} catch (err) {
 			console.error('Failed to save API key', err);
-			setKeySetupError(t('auth.saveError'));
+			const errMsg = err instanceof Error && err.message ? err.message : t('auth.saveError');
+			setKeySetupError(errMsg);
 		} finally {
 			setSavingKey(false);
 		}
@@ -556,13 +579,36 @@ export default function App() {
 		} catch (err) {
 			console.error('Failed to clear API key', err);
 		} finally {
-			setApiKey(null);
+			setCredentials(null);
 			setKeySetupSuccess(null);
 			setKeySetupError(null);
 			setStatus(AppState.IDLE);
 			setResult(null);
 			setError(null);
 		}
+	};
+
+	const cancelActiveRequest = () => {
+		if (activeRequestTokenRef.current) {
+			activeRequestTokenRef.current.cancelled = true;
+		}
+	};
+
+	const clearManualRetryTimer = () => {
+		if (manualRetryTimerRef.current) {
+			clearTimeout(manualRetryTimerRef.current);
+			manualRetryTimerRef.current = null;
+		}
+		setCanManualRetry(false);
+	};
+
+	const scheduleManualRetryTimer = (token: { cancelled: boolean }) => {
+		clearManualRetryTimer();
+		manualRetryTimerRef.current = setTimeout(() => {
+			if (!token.cancelled) {
+				setCanManualRetry(true);
+			}
+		}, 20000);
 	};
 
 	const handleOfflineSummarize = async (service: 'deepseek' | 'chatgpt' | 'gemini') => {
@@ -660,10 +706,16 @@ export default function App() {
 	};
 
 	const handleSummarize = async () => {
-		if (!apiKey) {
+		if (!credentials || !apiKey) {
 			handleLanguageAwareError(t('errors.apiKeyMissing'), 'API Key is not configured');
 			return;
 		}
+
+		cancelActiveRequest();
+		const requestToken = { cancelled: false };
+		activeRequestTokenRef.current = requestToken;
+		setCanManualRetry(false);
+		scheduleManualRetryTimer(requestToken);
 
 		setStatus(AppState.LOADING);
 		setError(null);
@@ -751,6 +803,7 @@ export default function App() {
 
 			const trimmedQuery = userQuery.trim();
 			let initialResult: AnalysisResult;
+			let usedCachedSummary = false;
 
 			// Reset retry attempt counter
 			setRetryAttempt(0);
@@ -762,35 +815,58 @@ export default function App() {
 			};
 
 			if (trimmedQuery) {
-				// User has a question: make TWO separate API calls in parallel
-				// Both wrapped with timeout and retry logic
-				const [userAnswerResult, analysisResult] = await Promise.all([
-					withTimeoutAndRetry(
-						() => answerUserQuestion(transcriptText, trimmedQuery, apiKey, selectedLanguageOption),
+				// User has a question: check if we already have a cached summary for this video
+				const videoId = extractVideoId(currentVideoUrl);
+				const cachedSummary = videoId ? await getSummary(videoId) : null;
+				const hasCachedSummary = cachedSummary && cachedSummary.language === language && cachedSummary.result.summary;
+
+				if (hasCachedSummary) {
+					// We have a cached summary: only answer the user's question, reuse the summary
+					usedCachedSummary = true;
+					const userAnswerResult = await withTimeoutAndRetry(
+						() => answerUserQuestion(transcriptText, trimmedQuery, credentials, selectedLanguageOption),
 						SUMMARY_TIMEOUT_MS,
 						MAX_RETRY_ATTEMPTS,
 						'User question analysis',
 						handleRetry,
-					),
-					withTimeoutAndRetry(
-						() => analyzeVideo(transcriptText, apiKey, selectedLanguageOption),
-						SUMMARY_TIMEOUT_MS,
-						MAX_RETRY_ATTEMPTS,
-						'Video analysis',
-						handleRetry,
-					),
-				]);
+					);
 
-				// Combine results: user answer goes in customAnswer field
-				initialResult = {
-					customAnswer: userAnswerResult,
-					summary: analysisResult.summary,
-					keyMoments: analysisResult.keyMoments,
-				};
+					// Combine new answer with cached summary
+					initialResult = {
+						customAnswer: userAnswerResult,
+						summary: cachedSummary.result.summary,
+						keyMoments: cachedSummary.result.keyMoments,
+					};
+				} else {
+					// No cached summary: make TWO separate API calls in parallel
+					const [userAnswerResult, analysisResult] = await Promise.all([
+						withTimeoutAndRetry(
+							() => answerUserQuestion(transcriptText, trimmedQuery, credentials, selectedLanguageOption),
+							SUMMARY_TIMEOUT_MS,
+							MAX_RETRY_ATTEMPTS,
+							'User question analysis',
+							handleRetry,
+						),
+						withTimeoutAndRetry(
+							() => analyzeVideo(transcriptText, credentials, selectedLanguageOption),
+							SUMMARY_TIMEOUT_MS,
+							MAX_RETRY_ATTEMPTS,
+							'Video analysis',
+							handleRetry,
+						),
+					]);
+
+					// Combine results: user answer goes in customAnswer field
+					initialResult = {
+						customAnswer: userAnswerResult,
+						summary: analysisResult.summary,
+						keyMoments: analysisResult.keyMoments,
+					};
+				}
 			} else {
 				// No question: just summarize with timeout and retry
 				initialResult = await withTimeoutAndRetry(
-					() => analyzeVideo(transcriptText, apiKey, selectedLanguageOption),
+					() => analyzeVideo(transcriptText, credentials, selectedLanguageOption),
 					SUMMARY_TIMEOUT_MS,
 					MAX_RETRY_ATTEMPTS,
 					'Video analysis',
@@ -801,46 +877,32 @@ export default function App() {
 			// Reset retry counter on success
 			setRetryAttempt(0);
 
+			if (requestToken.cancelled) {
+				clearManualRetryTimer();
+				return;
+			}
+
 			// Show initial result immediately
 			setResult(initialResult);
 			setStatus(AppState.SUCCESS);
+			clearManualRetryTimer();
 
-			// Start improvement phase in background
-			setIsImproving(true);
-
-			try {
-				const improvedResult = await improveResult(
-					initialResult,
-					transcriptText,
-					apiKey,
-					selectedLanguageOption,
-				);
-
-				// Update with improved result
-				setResult(improvedResult);
-
-				// Save improved result to IndexedDB for persistence
-				const videoId = extractVideoId(currentVideoUrl);
-				if (videoId && currentVideoUrl) {
-					saveSummary(videoId, improvedResult, currentVideoUrl, language, trimmedQuery).catch((err) => {
-						console.warn('Failed to save summary to cache:', err);
-					});
-				}
-			} catch (improvementError) {
-				// If improvement fails, keep the initial result and save it
-				console.warn('Improvement failed, keeping initial result:', improvementError);
-				const videoId = extractVideoId(currentVideoUrl);
-				if (videoId && currentVideoUrl) {
-					saveSummary(videoId, initialResult, currentVideoUrl, language, trimmedQuery).catch((err) => {
-						console.warn('Failed to save summary to cache:', err);
-					});
-				}
-			} finally {
-				setIsImproving(false);
+			// Save result to IndexedDB for persistence (improvement phase disabled for determinism)
+			const videoId = extractVideoId(currentVideoUrl);
+			if (videoId && currentVideoUrl) {
+				saveSummary(videoId, initialResult, currentVideoUrl, language, trimmedQuery).catch((err) => {
+					console.warn('Failed to save summary to cache:', err);
+				});
 			}
 		} catch (err: any) {
+			if (requestToken.cancelled) {
+				clearManualRetryTimer();
+				return;
+			}
+
 			setIsImproving(false);
 			setRetryAttempt(0);
+			clearManualRetryTimer();
 
 			const errorStack = err.stack || '';
 			const errorName = err.name || 'Error';
@@ -871,9 +933,12 @@ export default function App() {
 
 			const formattedDetails = `${errorName}: ${err.message || 'Unknown error'}${errorStack ? `\n\nStack trace:\n${errorStack}` : ''}`;
 
-			if (err.message && err.message.includes('Requested entity was not found')) {
+			const loweredMessage = err.message?.toLowerCase() ?? '';
+			const authErrorPatterns = ['requested entity was not found', 'invalid api key', 'unauthorized', 'permission', 'authentication'];
+
+			if (loweredMessage && authErrorPatterns.some((pattern) => loweredMessage.includes(pattern))) {
 				await clearUserApiKey();
-				setApiKey(null);
+				setCredentials(null);
 				setKeySetupSuccess(null);
 				handleLanguageAwareError(t('errors.apiKeyInvalid'), formattedDetails, false);
 			} else {
@@ -969,32 +1034,30 @@ export default function App() {
 					<h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">{t('auth.welcomeTitle')}</h2>
 					<p className="text-gray-500 dark:text-gray-400 text-sm mb-8">{t('auth.description')}</p>
 
-					<div className="space-y-2">
-						<button
-							onClick={handleConnectGoogle}
-							className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium rounded-lg border border-gray-300 dark:border-gray-600 transition-all shadow-sm group"
+					<div className="space-y-2 text-left">
+						<label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">{t('auth.providerLabel')}</label>
+						<select
+							value={selectedProvider}
+							onChange={(event) => {
+								const provider = event.target.value as LLMProvider;
+								setSelectedProvider(provider);
+								setKeySetupError(null);
+								setKeySetupSuccess(null);
+							}}
+							className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
 						>
-							<svg className="w-5 h-5" viewBox="0 0 24 24">
-								<path
-									fill="#4285F4"
-									d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-								/>
-								<path
-									fill="#34A853"
-									d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-								/>
-								<path
-									fill="#FBBC05"
-									d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.26-.19-.58z"
-								/>
-								<path
-									fill="#EA4335"
-									d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-								/>
-							</svg>
-							<span>{t('auth.googleButton')}</span>
-						</button>
-						<p className="text-[11px] text-gray-400 dark:text-gray-500">{t('auth.googleHelper')}</p>
+							{(Object.keys(PROVIDER_CONFIG) as LLMProvider[]).map((provider) => (
+								<option key={provider} value={provider}>
+									{PROVIDER_CONFIG[provider].label}
+								</option>
+							))}
+						</select>
+						<p className="text-[11px] text-gray-400 dark:text-gray-500">
+							{PROVIDER_CONFIG[selectedProvider].helper}
+						</p>
+						<p className="text-[11px] text-gray-400 dark:text-gray-500">
+							{t('auth.sampleKeyLabel')} {PROVIDER_CONFIG[selectedProvider].sample}
+						</p>
 					</div>
 
 					<div className="mt-6 text-left space-y-2">
@@ -1003,7 +1066,7 @@ export default function App() {
 							type="password"
 							value={apiKeyInput}
 							onChange={(e) => setApiKeyInput(e.target.value)}
-							placeholder={t('auth.placeholder') ?? ''}
+							placeholder={t(PROVIDER_CONFIG[selectedProvider].sampleKey)}
 							className="w-full px-4 py-2.5 text-sm bg-white dark:bg-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
 						/>
 						<button
@@ -1086,7 +1149,7 @@ export default function App() {
 							target="_blank"
 							rel="noopener noreferrer"
 							className="text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-							title="GitHub - TubeGist"
+							title="GitHub - Resumir"
 						>
 							<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
 								<path
@@ -1111,8 +1174,12 @@ export default function App() {
 			{/* Toast for improvement phase */}
 			<Toast message={t('toast.improving')} isVisible={isImproving} />
 
-			{!isYoutube && (
-				<div className="absolute inset-0 z-50 bg-gray-900/40 dark:bg-gray-950/60 backdrop-blur-[2px] flex items-center justify-center p-6 animate-fade-in">
+			{/* Onboarding Modals */}
+			{showWelcomeModal && <WelcomeModal onClose={() => setShowWelcomeModal(false)} />}
+			{showSummaryModal && <SummaryInstructionsModal onClose={() => setShowSummaryModal(false)} />}
+
+			{!isYoutube && !showWelcomeModal && !showSummaryModal && (
+				<div className="absolute inset-x-0 top-[72px] bottom-0 z-50 bg-gray-900/40 dark:bg-gray-950/60 backdrop-blur-[2px] flex items-center justify-center p-6 animate-fade-in">
 					<div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-6 text-center max-w-sm w-full transform transition-all scale-100">
 						<div className="mx-auto w-14 h-14 bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400 rounded-full flex items-center justify-center mb-4 ring-8 ring-red-50/50 dark:ring-red-900/30">
 							<svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1183,36 +1250,8 @@ export default function App() {
 				onReload={isCommunicationError ? handleReloadPage : undefined}
 			/>
 
-			{/* Audio API Key Required Modal */}
-			{showAudioApiKeyModal && (
-				<div className="absolute inset-0 z-50 bg-gray-900/40 dark:bg-gray-950/60 backdrop-blur-[2px] flex items-center justify-center p-6 animate-fade-in">
-					<div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-6 text-center max-w-sm w-full transform transition-all scale-100">
-						<div className="mx-auto w-14 h-14 bg-amber-50 dark:bg-amber-900/30 text-amber-500 dark:text-amber-400 rounded-full flex items-center justify-center mb-4 ring-8 ring-amber-50/50 dark:ring-amber-900/30">
-							<svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth="2"
-									d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.536a5 5 0 001.414 1.414m2.828-9.9a9 9 0 0112.728 0"
-								/>
-							</svg>
-						</div>
-						<h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">{t('audio.noApiKeyTitle')}</h3>
-						<p className="text-gray-500 dark:text-gray-400 text-sm mb-6 leading-relaxed">{t('audio.noApiKeyDescription')}</p>
-						<button
-							onClick={() => setShowAudioApiKeyModal(false)}
-							className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white rounded-lg font-medium transition-colors text-sm shadow-sm"
-						>
-							{t('errorModal.close')}
-						</button>
-					</div>
-				</div>
-			)}
-
 			<header
-				className={`sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-4 py-3 shadow-sm flex flex-col gap-2 md:flex-row md:items-center md:justify-between transition-opacity ${
-					!isYoutube ? 'opacity-50 pointer-events-none' : ''
-				}`}
+				className="sticky top-0 z-[51] bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-4 py-3 shadow-sm flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
 			>
 				<div className="flex items-center gap-2">
 					<Logo className="w-7 h-7" />
@@ -1296,10 +1335,7 @@ export default function App() {
 										<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
 									</svg>
 								) : (
-									/* DeepSeek Logo */
-									<svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-										<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-									</svg>
+									<img src="/assets/deepseek-logo.png" alt="DeepSeek" className="w-5 h-5 object-contain" />
 								)}
 								<span>{t('offline.summarizeWithDeepSeek')}</span>
 							</button>
@@ -1316,10 +1352,7 @@ export default function App() {
 										<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
 									</svg>
 								) : (
-									/* OpenAI Logo */
-									<svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-										<path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364l2.0201-1.1638a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.4046-.6813zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/>
-									</svg>
+									<img src="/assets/openai-logo.png" alt="OpenAI" className="w-5 h-5 object-contain" />
 								)}
 								<span>{t('offline.summarizeWithChatGPT')}</span>
 							</button>
@@ -1336,10 +1369,7 @@ export default function App() {
 										<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
 									</svg>
 								) : (
-									/* Google Gemini Logo */
-									<svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-										<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
-									</svg>
+									<img src="/assets/google-gemini-logo.png" alt="Google Gemini" className="w-5 h-5 object-contain" />
 								)}
 								<span>{t('offline.summarizeWithGemini')}</span>
 							</button>
@@ -1368,6 +1398,18 @@ export default function App() {
 					)}
 
 					<LoadingStatus isActive={status === AppState.LOADING} transcriptLength={transcriptLength} />
+
+					{status === AppState.LOADING && canManualRetry && (
+						<div className="mt-3 flex flex-col items-center gap-2 animate-fade-in">
+							<p className="text-xs text-gray-500 dark:text-gray-400 text-center">{t('loading.delayedHint')}</p>
+							<button
+								onClick={handleSummarize}
+								className="px-4 py-2 text-sm font-medium rounded-lg border border-brand-200 dark:border-brand-700 text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-900/30 transition-colors"
+							>
+								{t('loading.retryCta')}
+							</button>
+						</div>
+					)}
 				</div>
 
 				{status === AppState.SUCCESS && result && (
@@ -1413,55 +1455,44 @@ export default function App() {
 						)}
 
 						{result.customAnswer && (
-							<Card
-								className="border-brand-200 dark:border-brand-800 bg-brand-50/50 dark:bg-brand-900/20"
-								title={t('result.answerTitle')}
-								icon={
-									<svg className="w-4 h-4 text-brand-600 dark:text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-										<path
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth="2"
-											d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-										/>
-									</svg>
-								}
-								headerAction={
-									<AudioPlayButton
-										text={result.customAnswer.text}
-										apiKey={apiKey}
-										onNoApiKey={() => setShowAudioApiKeyModal(true)}
-									/>
-								}
-							>
-								<p className="text-gray-900 dark:text-gray-100 font-medium mb-3">{result.customAnswer.text}</p>
-								{result.customAnswer.relatedSegments && result.customAnswer.relatedSegments.length > 0 && (
-									<div className="flex flex-wrap gap-2">
-										{result.customAnswer.relatedSegments.map((seg, idx) => (
-											<TimestampBadge key={idx} time={seg} onSelect={seekToVideoTime} />
-										))}
-									</div>
-								)}
-							</Card>
-						)}
-
-						<Card
-							title={t('result.summaryTitle')}
-							icon={
-								<svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7" />
-								</svg>
-							}
-							headerAction={
-								<AudioPlayButton
-									text={result.summary}
-									apiKey={apiKey}
-									onNoApiKey={() => setShowAudioApiKeyModal(true)}
+					<Card
+						className="border-brand-200 dark:border-brand-800 bg-brand-50/50 dark:bg-brand-900/20"
+						title={t('result.answerTitle')}
+						icon={
+							<svg className="w-4 h-4 text-brand-600 dark:text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth="2"
+									d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
 								/>
-							}
-						>
-							{result.summary}
-						</Card>
+							</svg>
+						}
+						headerAction={<SpeakButton text={result.customAnswer.text} lang={language} />}
+					>
+						<p className="text-gray-900 dark:text-gray-100 font-medium mb-3">{result.customAnswer.text}</p>
+						{result.customAnswer.relatedSegments && result.customAnswer.relatedSegments.length > 0 && (
+							<div className="flex flex-wrap gap-2">
+								{result.customAnswer.relatedSegments.map((seg, idx) => (
+									<TimestampBadge key={idx} time={seg} onSelect={seekToVideoTime} />
+								))}
+							</div>
+						)}
+					</Card>
+				)}
+
+				<Card
+					title={t('result.summaryTitle')}
+					icon={
+						<svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7" />
+						</svg>
+					}
+					headerAction={<SpeakButton text={result.summary} lang={language} />}
+				>
+					{result.summary}
+				</Card>
+
 
 						<Card
 							title={t('result.keyMomentsTitle')}
@@ -1494,43 +1525,39 @@ export default function App() {
 			</main>
 
 			{/* Fixed Footer */}
-			<footer className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-100 dark:border-gray-700 px-4 py-3 shadow-sm">
-				<div className="flex items-center justify-between max-w-sm mx-auto">
-					<span className="text-xs text-gray-400 dark:text-gray-500">
-						{t('footer.powered', {
-							mode: typeof chrome !== 'undefined' && chrome.tabs ? t('footer.extensionMode') : t('footer.mockMode'),
-						})}
-					</span>
-					<div className="flex items-center gap-3">
-						{/* LinkedIn */}
-						<a
-							href="https://www.linkedin.com/in/frederico-kluser/"
-							target="_blank"
-							rel="noopener noreferrer"
-							className="text-gray-400 hover:text-[#0077B5] transition-colors"
-							title="LinkedIn - Frederico Kluser"
-						>
-							<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-								<path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
-							</svg>
-						</a>
-						{/* GitHub */}
-						<a
-							href="https://github.com/frederico-kluser/tubegist"
-							target="_blank"
-							rel="noopener noreferrer"
-							className="text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-							title="GitHub - TubeGist"
-						>
-							<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-								<path
-									fillRule="evenodd"
-									clipRule="evenodd"
-									d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
-								/>
-							</svg>
-						</a>
-					</div>
+			<footer className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-100 dark:border-gray-700 px-4 py-2.5 shadow-sm">
+				<div className="flex items-center justify-center gap-4 max-w-sm mx-auto">
+					{/* GitHub - Open Source */}
+					<a
+						href="https://github.com/frederico-kluser/tubegist"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+					>
+						<svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+							<path
+								fillRule="evenodd"
+								clipRule="evenodd"
+								d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+							/>
+						</svg>
+						<span>{t('footer.openSource')}</span>
+					</a>
+
+					<span className="text-gray-300 dark:text-gray-600">•</span>
+
+					{/* LinkedIn - Creator */}
+					<a
+						href="https://www.linkedin.com/in/frederico-kluser/"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-[#0077B5] transition-colors"
+					>
+						<svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+							<path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+						</svg>
+						<span>{t('footer.createdBy')}</span>
+					</a>
 				</div>
 			</footer>
 			{/* Spacer to prevent content from being hidden behind fixed footer */}

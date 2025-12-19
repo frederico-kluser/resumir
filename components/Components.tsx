@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   isLoading?: boolean;
@@ -80,3 +81,57 @@ export const TimestampBadge: React.FC<TimestampBadgeProps> = ({ time, onSelect }
     {time}
   </button>
 );
+
+interface SpeakButtonProps {
+  text: string;
+  lang: string;
+}
+
+export const SpeakButton: React.FC<SpeakButtonProps> = ({ text, lang }) => {
+  const { t } = useTranslation();
+  const { speak, stop, isSpeaking, isSupported } = useSpeechSynthesis({ lang });
+
+  if (!isSupported) {
+    return null;
+  }
+
+  const handleClick = () => {
+    if (isSpeaking) {
+      stop();
+    } else {
+      speak(text);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className={`
+        inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium
+        transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1
+        ${isSpeaking
+          ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 hover:bg-red-200 dark:hover:bg-red-900/50 focus:ring-red-300 dark:focus:ring-red-700'
+          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 focus:ring-gray-300 dark:focus:ring-gray-500'
+        }
+      `}
+      title={isSpeaking ? t('speak.stop') : t('speak.play')}
+    >
+      {isSpeaking ? (
+        <>
+          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+            <rect x="6" y="6" width="12" height="12" rx="1" />
+          </svg>
+          <span>{t('speak.stop')}</span>
+        </>
+      ) : (
+        <>
+          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          <span>{t('speak.play')}</span>
+        </>
+      )}
+    </button>
+  );
+};

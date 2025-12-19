@@ -4,7 +4,7 @@
 
 **Resuma vídeos do YouTube com Inteligência Artificial**
 
-[![Version](https://img.shields.io/badge/Version-1.0.2-blue.svg)](https://github.com/user/resumir/releases)
+[![Version](https://img.shields.io/badge/Version-1.0.14-blue.svg)](https://github.com/user/resumir/releases)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 [![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-green?logo=googlechrome&logoColor=white)](https://chrome.google.com/webstore)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev)
@@ -54,7 +54,7 @@ O **Resumir** é uma extensão de navegador (side panel) para Chrome que utiliza
 | **UI / Side Panel** | `App.tsx`, `components/*` | Interface React renderizada como side panel da extensão |
 | **Background** | `background.ts` | Service worker que gerencia estados e permissões |
 | **Content Script** | `content.ts` | Injeta código no YouTube para extrair transcrições e controlar o player |
-| **Serviço de IA** | `services/geminiService.ts` | Integração com a API Gemini para análise de conteúdo |
+| **Serviço de IA** | `services/geminiService.ts` | Orquestrador LangChain multi-provedor (Gemini/OpenAI/Anthropic/Groq/DeepSeek) |
 | **Armazenamento** | `services/apiKeyStorage.ts` | Gerencia a chave da API de forma segura e local |
 | **Internacionalização** | `i18n.ts` | Configuração completa de tradução para 10 idiomas |
 
