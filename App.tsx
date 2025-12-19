@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Logo } from './components/Logo';
-import { Button, Card, TimestampBadge, SpeakButton } from './components/Components';
+import { Button, Card, TimestampBadge } from './components/Components';
 import { WelcomeModal, SummaryInstructionsModal, shouldShowOnboarding } from './components/OnboardingModal';
 import { LoadingStatus } from './components/LoadingStatus';
 import { ErrorModal } from './components/ErrorModal';
@@ -1468,8 +1468,7 @@ export default function App() {
 								/>
 							</svg>
 						}
-						headerAction={<SpeakButton text={result.customAnswer.text} lang={language} />}
-					>
+										>
 						<p className="text-gray-900 dark:text-gray-100 font-medium mb-3">{result.customAnswer.text}</p>
 						{result.customAnswer.relatedSegments && result.customAnswer.relatedSegments.length > 0 && (
 							<div className="flex flex-wrap gap-2">
@@ -1488,8 +1487,7 @@ export default function App() {
 							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7" />
 						</svg>
 					}
-					headerAction={<SpeakButton text={result.summary} lang={language} />}
-				>
+							>
 					{result.summary}
 				</Card>
 
