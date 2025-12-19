@@ -1176,7 +1176,7 @@ export default function App() {
 			<Toast message={t('toast.improving')} isVisible={isImproving} />
 
 			{!isYoutube && (
-				<div className="absolute inset-0 z-50 bg-gray-900/40 dark:bg-gray-950/60 backdrop-blur-[2px] flex items-center justify-center p-6 animate-fade-in">
+				<div className="absolute inset-x-0 top-[72px] bottom-0 z-50 bg-gray-900/40 dark:bg-gray-950/60 backdrop-blur-[2px] flex items-center justify-center p-6 animate-fade-in">
 					<div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-6 text-center max-w-sm w-full transform transition-all scale-100">
 						<div className="mx-auto w-14 h-14 bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400 rounded-full flex items-center justify-center mb-4 ring-8 ring-red-50/50 dark:ring-red-900/30">
 							<svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1248,9 +1248,7 @@ export default function App() {
 			/>
 
 			<header
-				className={`sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-4 py-3 shadow-sm flex flex-col gap-2 md:flex-row md:items-center md:justify-between transition-opacity ${
-					!isYoutube ? 'opacity-50 pointer-events-none' : ''
-				}`}
+				className="sticky top-0 z-[51] bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-4 py-3 shadow-sm flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
 			>
 				<div className="flex items-center gap-2">
 					<Logo className="w-7 h-7" />
