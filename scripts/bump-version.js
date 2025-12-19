@@ -7,6 +7,7 @@
  * - package-lock.json
  * - README.md (English)
  * - README.pt-BR.md (Portuguese)
+ * - manifest.json (browser extension)
  */
 
 import { readFileSync, writeFileSync } from 'fs';
@@ -80,6 +81,17 @@ function main() {
     console.log('Updated: package-lock.json');
   } catch (e) {
     console.warn('Warning: Could not update package-lock.json');
+  }
+
+  // Update manifest.json
+  const manifestPath = join(rootDir, 'manifest.json');
+  try {
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.version = newVersion;
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+    console.log('Updated: manifest.json');
+  } catch (e) {
+    console.warn('Warning: Could not update manifest.json');
   }
 
   // Update README.md (English)

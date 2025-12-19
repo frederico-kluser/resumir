@@ -11,6 +11,6 @@ echo "Pre-commit: Bumping version..."
 node scripts/bump-version.js
 
 # Add the modified files to the commit
-git add package.json package-lock.json README.md README.pt-BR.md
+git add package.json package-lock.json manifest.json README.md README.pt-BR.md
 
 echo "Pre-commit: Version files added to commit"
