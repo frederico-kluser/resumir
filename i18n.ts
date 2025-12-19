@@ -87,6 +87,10 @@ const resources = {
 			toast: {
 				improving: 'Improving and verifying the result...',
 			},
+			speak: {
+				play: 'Listen',
+				stop: 'Stop',
+			},
 			footer: {
 				powered: 'Powered by {{provider}} • {{mode}}',
 				extensionMode: 'Extension Mode',
@@ -228,6 +232,10 @@ const resources = {
 			},
 			toast: {
 				improving: 'Mejorando y verificando el resultado...',
+			},
+			speak: {
+				play: 'Escuchar',
+				stop: 'Detener',
 			},
 			footer: {
 				powered: 'Impulsado por {{provider}} • {{mode}}',
@@ -371,6 +379,10 @@ const resources = {
 			toast: {
 				improving: 'Melhorando e verificando o resultado...',
 			},
+			speak: {
+				play: 'Ouvir',
+				stop: 'Parar',
+			},
 			footer: {
 				powered: 'Com tecnologia {{provider}} • {{mode}}',
 				extensionMode: 'Modo extensão',
@@ -510,6 +522,10 @@ const resources = {
 			toast: {
 				improving: 'Amélioration et vérification du résultat...',
 			},
+			speak: {
+				play: 'Écouter',
+				stop: 'Arrêter',
+			},
 			footer: {
 				powered: 'Propulsé par Gemini • {{mode}}',
 				extensionMode: 'Mode extension',
@@ -646,6 +662,10 @@ const resources = {
 			toast: {
 				improving: 'جارٍ تحسين النتيجة والتحقق منها...',
 			},
+			speak: {
+				play: 'استمع',
+				stop: 'إيقاف',
+			},
 			footer: {
 				powered: 'مدعوم من Gemini • {{mode}}',
 				extensionMode: 'وضع الامتداد',
@@ -780,6 +800,10 @@ const resources = {
 			},
 			toast: {
 				improving: '正在改进和验证结果...',
+			},
+			speak: {
+				play: '收听',
+				stop: '停止',
 			},
 			footer: {
 				powered: '由 Gemini 提供支持 • {{mode}}',
@@ -918,6 +942,10 @@ const resources = {
 			toast: {
 				improving: 'परिणाम में सुधार और सत्यापन कर रहे हैं...',
 			},
+			speak: {
+				play: 'सुनें',
+				stop: 'रोकें',
+			},
 			footer: {
 				powered: 'Gemini द्वारा संचालित • {{mode}}',
 				extensionMode: 'एक्सटेंशन मोड',
@@ -1055,6 +1083,10 @@ const resources = {
 			toast: {
 				improving: 'ফলাফল উন্নত ও যাচাই করা হচ্ছে...',
 			},
+			speak: {
+				play: 'শুনুন',
+				stop: 'থামুন',
+			},
 			footer: {
 				powered: 'Gemini দ্বারা পরিচালিত • {{mode}}',
 				extensionMode: 'এক্সটেনশন মোড',
@@ -1190,6 +1222,10 @@ const resources = {
 			},
 			toast: {
 				improving: 'Улучшаем и проверяем результат...',
+			},
+			speak: {
+				play: 'Слушать',
+				stop: 'Стоп',
 			},
 			footer: {
 				powered: 'Работает на Gemini • {{mode}}',
@@ -1327,6 +1363,10 @@ const resources = {
 			},
 			toast: {
 				improving: 'Meningkatkan dan memverifikasi hasil...',
+			},
+			speak: {
+				play: 'Dengarkan',
+				stop: 'Berhenti',
 			},
 			footer: {
 				powered: 'Didukung oleh Gemini • {{mode}}',
