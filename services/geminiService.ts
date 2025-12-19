@@ -50,7 +50,7 @@ const createLLM = (credentials: ApiCredentials, options: LLMOptions = {}): BaseC
   ensureCredentials(credentials);
 
   const baseConfig = {
-    temperature: options.temperature ?? 0.3,
+    temperature: options.temperature ?? 0,
     maxRetries: options.maxRetries ?? 2,
   };
 
@@ -311,7 +311,7 @@ export const answerUserQuestion = async (
 
   const { languageName, languageCode } = sanitizeLanguage(targetLanguage);
   const sanitizedTranscript = sanitizeTranscript(transcript) || 'Transcript unavailable.';
-  const llm = createLLM(credentials, { temperature: 0.25, maxTokens: 1024, maxRetries: 3 });
+  const llm = createLLM(credentials, { temperature: 0, maxTokens: 1024, maxRetries: 3 });
   const prompt = buildQuestionPrompt(sanitizedTranscript, userQuery, languageName, languageCode);
   const response = await invokeModelForJson<UserAnswerResult>(llm, prompt, 'answerUserQuestion');
 
@@ -327,7 +327,7 @@ export const analyzeVideo = async (
 
   const { languageName, languageCode } = sanitizeLanguage(targetLanguage);
   const sanitizedTranscript = sanitizeTranscript(transcript) || 'Transcript unavailable. Explain the limitation.';
-  const llm = createLLM(credentials, { temperature: 0.3, maxTokens: 2048, maxRetries: 3 });
+  const llm = createLLM(credentials, { temperature: 0, maxTokens: 2048, maxRetries: 3 });
   const prompt = buildSummaryPrompt(sanitizedTranscript, languageName, languageCode);
 
   lastAnalysisPrompt = prompt;
@@ -350,7 +350,7 @@ export const improveResult = async (
 
   const { languageName, languageCode } = sanitizeLanguage(targetLanguage);
   const sanitizedTranscript = sanitizeTranscript(transcript);
-  const llm = createLLM(credentials, { temperature: 0.2, maxTokens: 2048, maxRetries: 3 });
+  const llm = createLLM(credentials, { temperature: 0, maxTokens: 2048, maxRetries: 3 });
   const originalPrompt = lastAnalysisPrompt || `Analyze in ${languageName} (${languageCode})`;
 
   return validateAndFixResult(llm, result, sanitizedTranscript, originalPrompt, languageName, languageCode);

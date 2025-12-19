@@ -7,7 +7,7 @@ import { ErrorModal } from './components/ErrorModal';
 import { Toast } from './components/Toast';
 import { ThemeSelector } from './components/ThemeSelector';
 import { useTheme } from './hooks/useTheme';
-import { analyzeVideo, answerUserQuestion, improveResult, validateProviderCredentials } from './services/geminiService';
+import { analyzeVideo, answerUserQuestion, validateProviderCredentials } from './services/geminiService';
 import { getUserApiKey, saveUserApiKey, clearUserApiKey } from './services/apiKeyStorage';
 import { getSummary, saveSummary, extractVideoId, StoredSummary } from './services/summaryStorage';
 import { buildOfflinePrompt, storePendingPrompt, copyToClipboard, openDeepSeekChat, openChatGPT, openGeminiChat, storePendingPromptForService } from './services/offlinePromptService';
@@ -874,62 +874,12 @@ export default function App() {
 			setStatus(AppState.SUCCESS);
 			clearManualRetryTimer();
 
-			// Start improvement phase in background (skip if we used cached summary)
-			if (usedCachedSummary) {
-				// Summary was already improved before caching, no need to improve again
-				// Just save the updated result with the new customAnswer
-				setIsImproving(false);
-				const videoId = extractVideoId(currentVideoUrl);
-				if (videoId && currentVideoUrl) {
-					saveSummary(videoId, initialResult, currentVideoUrl, language, trimmedQuery).catch((err) => {
-						console.warn('Failed to save summary to cache:', err);
-					});
-				}
-			} else {
-				setIsImproving(true);
-
-				try {
-					const improvedResult = await improveResult(
-						initialResult,
-						transcriptText,
-						credentials,
-						selectedLanguageOption,
-					);
-
-					if (requestToken.cancelled) {
-						setIsImproving(false);
-						return;
-					}
-
-					// Update with improved result
-					setResult(improvedResult);
-
-					// Save improved result to IndexedDB for persistence
-					const videoId = extractVideoId(currentVideoUrl);
-					if (videoId && currentVideoUrl) {
-						saveSummary(videoId, improvedResult, currentVideoUrl, language, trimmedQuery).catch((err) => {
-							console.warn('Failed to save summary to cache:', err);
-						});
-					}
-				} catch (improvementError) {
-					if (requestToken.cancelled) {
-						setIsImproving(false);
-						return;
-					}
-
-					// If improvement fails, keep the initial result and save it
-					console.warn('Improvement failed, keeping initial result:', improvementError);
-					const videoId = extractVideoId(currentVideoUrl);
-					if (videoId && currentVideoUrl) {
-						saveSummary(videoId, initialResult, currentVideoUrl, language, trimmedQuery).catch((err) => {
-							console.warn('Failed to save summary to cache:', err);
-						});
-					}
-				} finally {
-					if (!requestToken.cancelled) {
-						setIsImproving(false);
-					}
-				}
+			// Save result to IndexedDB for persistence (improvement phase disabled for determinism)
+			const videoId = extractVideoId(currentVideoUrl);
+			if (videoId && currentVideoUrl) {
+				saveSummary(videoId, initialResult, currentVideoUrl, language, trimmedQuery).catch((err) => {
+					console.warn('Failed to save summary to cache:', err);
+				});
 			}
 		} catch (err: any) {
 			if (requestToken.cancelled) {
