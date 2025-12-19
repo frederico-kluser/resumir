@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const ONBOARDING_STORAGE_PREFIX = 'tubegist.onboarding.';
+const ONBOARDING_STORAGE_PREFIX = 'resumir.onboarding.';
 
 interface OnboardingModalProps {
   id: string;
@@ -169,14 +169,6 @@ export const SummaryInstructionsModal: React.FC<{ onClose: () => void }> = ({ on
             </svg>
             <p className="text-sm text-gray-700 dark:text-gray-300">
               {t('onboarding.summary.tip2')}
-            </p>
-          </div>
-          <div className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-            </svg>
-            <p className="text-sm text-gray-700 dark:text-gray-300">
-              {t('onboarding.summary.tip3')}
             </p>
           </div>
         </div>

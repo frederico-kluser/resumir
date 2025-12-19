@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Logo } from './components/Logo';
-import { Button, Card, TimestampBadge, SpeakButton } from './components/Components';
+import { Button, Card, TimestampBadge } from './components/Components';
 import { WelcomeModal, SummaryInstructionsModal, shouldShowOnboarding } from './components/OnboardingModal';
 import { LoadingStatus } from './components/LoadingStatus';
 import { ErrorModal } from './components/ErrorModal';
@@ -16,8 +16,8 @@ import { getFullTranscriptText } from './mockData';
 import { AnalysisResult, AppState, ApiCredentials, LLMProvider } from './types';
 import { LANGUAGE_OPTIONS } from './i18n';
 
-const LANGUAGE_STORAGE_KEY = 'tubegist.language';
-const OFFLINE_MODE_STORAGE_KEY = 'tubegist.offlineMode';
+const LANGUAGE_STORAGE_KEY = 'resumir.language';
+const OFFLINE_MODE_STORAGE_KEY = 'resumir.offlineMode';
 const SUPPORTED_LANGUAGE_CODES = new Set(LANGUAGE_OPTIONS.map(({ code }) => code));
 
 interface ProviderConfig {
@@ -1145,7 +1145,7 @@ export default function App() {
 						</a>
 						{/* GitHub */}
 						<a
-							href="https://github.com/frederico-kluser/tubegist"
+							href="https://github.com/frederico-kluser/resumir"
 							target="_blank"
 							rel="noopener noreferrer"
 							className="text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
@@ -1468,8 +1468,7 @@ export default function App() {
 								/>
 							</svg>
 						}
-						headerAction={<SpeakButton text={result.customAnswer.text} lang={language} />}
-					>
+										>
 						<p className="text-gray-900 dark:text-gray-100 font-medium mb-3">{result.customAnswer.text}</p>
 						{result.customAnswer.relatedSegments && result.customAnswer.relatedSegments.length > 0 && (
 							<div className="flex flex-wrap gap-2">
@@ -1488,8 +1487,7 @@ export default function App() {
 							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7" />
 						</svg>
 					}
-					headerAction={<SpeakButton text={result.summary} lang={language} />}
-				>
+							>
 					{result.summary}
 				</Card>
 
@@ -1529,7 +1527,7 @@ export default function App() {
 				<div className="flex items-center justify-center gap-4 max-w-sm mx-auto">
 					{/* GitHub - Open Source */}
 					<a
-						href="https://github.com/frederico-kluser/tubegist"
+						href="https://github.com/frederico-kluser/resumir"
 						target="_blank"
 						rel="noopener noreferrer"
 						className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
