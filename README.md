@@ -4,7 +4,7 @@
 
 **Summarize YouTube videos with Artificial Intelligence**
 
-[![Version](https://img.shields.io/badge/Version-1.0.14-blue.svg)](https://github.com/user/resumir/releases)
+[![Version](https://img.shields.io/badge/Version-1.1.2-blue.svg)](https://github.com/user/resumir/releases)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 [![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-green?logo=googlechrome&logoColor=white)](https://chrome.google.com/webstore)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev)
@@ -19,7 +19,8 @@
 
 ## What is Resumir?
 
-**Resumir** is a Chrome browser extension (side panel) that uses the Google Gemini API to intelligently analyze YouTube videos. With it, you can:
+**Resumir** is a Chrome browser extension (side panel) that uses the Google Gemini API to intelligently analyze YouTube
+videos. With it, you can:
 
 - **Get instant summaries** of any video with captions
 - **Ask specific questions** about the video content
@@ -28,14 +29,14 @@
 
 ## Features
 
-| Feature | Description |
-|---------|-------------|
-| **Smart Summary** | Generates a concise ~100-word summary of the video |
-| **Q&A** | Answers specific questions based on the video transcript |
-| **Key Moments** | Identifies and lists 3-5 crucial moments with timestamps |
-| **Clickable Timestamps** | Click any timestamp to jump directly to that moment |
-| **Multi-language** | Interface available in 10 languages |
-| **Caption Detection** | Automatically indicates if the video has captions available |
+| Feature                  | Description                                                 |
+| ------------------------ | ----------------------------------------------------------- |
+| **Smart Summary**        | Generates a concise ~100-word summary of the video          |
+| **Q&A**                  | Answers specific questions based on the video transcript    |
+| **Key Moments**          | Identifies and lists 3-5 crucial moments with timestamps    |
+| **Clickable Timestamps** | Click any timestamp to jump directly to that moment         |
+| **Multi-language**       | Interface available in 10 languages                         |
+| **Caption Detection**    | Automatically indicates if the video has captions available |
 
 ## How It Works
 
@@ -49,14 +50,14 @@
 
 ## Architecture
 
-| Component | File(s) | Description |
-|-----------|---------|-------------|
-| **UI / Side Panel** | `App.tsx`, `components/*` | React interface rendered as extension side panel |
-| **Background** | `background.ts` | Service worker managing states and permissions |
-| **Content Script** | `content.ts` | Injects code into YouTube to extract transcripts and control the player |
-| **AI Service** | `services/geminiService.ts` | LangChain multi-provider orchestrator (Gemini/OpenAI/Anthropic/Groq/DeepSeek) |
-| **Storage** | `services/apiKeyStorage.ts` | Manages API key securely and locally |
-| **Internationalization** | `i18n.ts` | Complete translation setup for 10 languages |
+| Component                | File(s)                     | Description                                                                   |
+| ------------------------ | --------------------------- | ----------------------------------------------------------------------------- |
+| **UI / Side Panel**      | `App.tsx`, `components/*`   | React interface rendered as extension side panel                              |
+| **Background**           | `background.ts`             | Service worker managing states and permissions                                |
+| **Content Script**       | `content.ts`                | Injects code into YouTube to extract transcripts and control the player       |
+| **AI Service**           | `services/geminiService.ts` | LangChain multi-provider orchestrator (Gemini/OpenAI/Anthropic/Groq/DeepSeek) |
+| **Storage**              | `services/apiKeyStorage.ts` | Manages API key securely and locally                                          |
+| **Internationalization** | `i18n.ts`                   | Complete translation setup for 10 languages                                   |
 
 ## Tech Stack
 
@@ -78,22 +79,26 @@
 ### Steps
 
 1. **Clone the repository**
+
 ```bash
 git clone https://github.com/frederico-kluser/resumir.git
 cd resumir
 ```
 
 2. **Install dependencies**
+
 ```bash
 npm install
 ```
 
 3. **Build for production**
+
 ```bash
 npm run build
 ```
 
 4. **Load in Chrome**
+
    - Go to `chrome://extensions`
    - Enable "Developer mode"
    - Click "Load unpacked"
@@ -114,7 +119,8 @@ npm run preview   # Preview build locally
 
 ## Open Source
 
-This project is **open source** and available under the **Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)** license.
+This project is **open source** and available under the **Creative Commons Attribution-NonCommercial 4.0 International
+(CC BY-NC 4.0)** license.
 
 ### You can:
 
@@ -172,7 +178,8 @@ Developed by **Frederico Kluser**
 
 ## License
 
-This project is licensed under the [Creative Commons Attribution-NonCommercial 4.0 International License](https://creativecommons.org/licenses/by-nc/4.0/).
+This project is licensed under the
+[Creative Commons Attribution-NonCommercial 4.0 International License](https://creativecommons.org/licenses/by-nc/4.0/).
 
 See the [LICENSE](LICENSE) file for more details.
 
@@ -182,6 +189,7 @@ See the [LICENSE](LICENSE) file for more details.
 
 **Resumir** - Understand videos in seconds
 
-[Report Bug](https://github.com/frederico-kluser/resumir/issues) · [Request Feature](https://github.com/frederico-kluser/resumir/issues)
+[Report Bug](https://github.com/frederico-kluser/resumir/issues) ·
+[Request Feature](https://github.com/frederico-kluser/resumir/issues)
 
 </div>
