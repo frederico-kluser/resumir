@@ -1,6 +1,6 @@
 import { ApiCredentials, LLMProvider } from '../types';
 
-const STORAGE_KEY = 'tubegist:gemini_api_key';
+const STORAGE_KEY = 'resumir:gemini_api_key';
 
 declare const chrome: any;
 

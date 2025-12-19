@@ -1,6 +1,6 @@
 import { AnalysisResult } from '../types';
 
-const DB_NAME = 'tubegist-summaries';
+const DB_NAME = 'resumir-summaries';
 const DB_VERSION = 1;
 const STORE_NAME = 'summaries';
 

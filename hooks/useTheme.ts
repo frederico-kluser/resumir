@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 export type Theme = 'light' | 'dark' | 'system';
 
-const THEME_STORAGE_KEY = 'tubegist.theme';
+const THEME_STORAGE_KEY = 'resumir.theme';
 
 const getSystemTheme = (): 'light' | 'dark' => {
 	if (typeof window === 'undefined') return 'light';

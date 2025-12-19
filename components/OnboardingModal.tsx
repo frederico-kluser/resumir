@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const ONBOARDING_STORAGE_PREFIX = 'tubegist.onboarding.';
+const ONBOARDING_STORAGE_PREFIX = 'resumir.onboarding.';
 
 interface OnboardingModalProps {
   id: string;

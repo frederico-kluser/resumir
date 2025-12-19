@@ -16,8 +16,8 @@ import { getFullTranscriptText } from './mockData';
 import { AnalysisResult, AppState, ApiCredentials, LLMProvider } from './types';
 import { LANGUAGE_OPTIONS } from './i18n';
 
-const LANGUAGE_STORAGE_KEY = 'tubegist.language';
-const OFFLINE_MODE_STORAGE_KEY = 'tubegist.offlineMode';
+const LANGUAGE_STORAGE_KEY = 'resumir.language';
+const OFFLINE_MODE_STORAGE_KEY = 'resumir.offlineMode';
 const SUPPORTED_LANGUAGE_CODES = new Set(LANGUAGE_OPTIONS.map(({ code }) => code));
 
 interface ProviderConfig {
@@ -1145,7 +1145,7 @@ export default function App() {
 						</a>
 						{/* GitHub */}
 						<a
-							href="https://github.com/frederico-kluser/tubegist"
+							href="https://github.com/frederico-kluser/resumir"
 							target="_blank"
 							rel="noopener noreferrer"
 							className="text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
@@ -1529,7 +1529,7 @@ export default function App() {
 				<div className="flex items-center justify-center gap-4 max-w-sm mx-auto">
 					{/* GitHub - Open Source */}
 					<a
-						href="https://github.com/frederico-kluser/tubegist"
+						href="https://github.com/frederico-kluser/resumir"
 						target="_blank"
 						rel="noopener noreferrer"
 						className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
