@@ -1178,7 +1178,7 @@ export default function App() {
 			{showWelcomeModal && <WelcomeModal onClose={() => setShowWelcomeModal(false)} />}
 			{showSummaryModal && <SummaryInstructionsModal onClose={() => setShowSummaryModal(false)} />}
 
-			{!isYoutube && (
+			{!isYoutube && !showWelcomeModal && !showSummaryModal && (
 				<div className="absolute inset-x-0 top-[72px] bottom-0 z-50 bg-gray-900/40 dark:bg-gray-950/60 backdrop-blur-[2px] flex items-center justify-center p-6 animate-fade-in">
 					<div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-6 text-center max-w-sm w-full transform transition-all scale-100">
 						<div className="mx-auto w-14 h-14 bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400 rounded-full flex items-center justify-center mb-4 ring-8 ring-red-50/50 dark:ring-red-900/30">
