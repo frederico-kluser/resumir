@@ -790,6 +790,7 @@ export default function App() {
 
 			const trimmedQuery = userQuery.trim();
 			let initialResult: AnalysisResult;
+			let usedCachedSummary = false;
 
 			// Reset retry attempt counter
 			setRetryAttempt(0);
@@ -801,31 +802,54 @@ export default function App() {
 			};
 
 			if (trimmedQuery) {
-				// User has a question: make TWO separate API calls in parallel
-				// Both wrapped with timeout and retry logic
-				const [userAnswerResult, analysisResult] = await Promise.all([
-					withTimeoutAndRetry(
+				// User has a question: check if we already have a cached summary for this video
+				const videoId = extractVideoId(currentVideoUrl);
+				const cachedSummary = videoId ? await getSummary(videoId) : null;
+				const hasCachedSummary = cachedSummary && cachedSummary.language === language && cachedSummary.result.summary;
+
+				if (hasCachedSummary) {
+					// We have a cached summary: only answer the user's question, reuse the summary
+					usedCachedSummary = true;
+					const userAnswerResult = await withTimeoutAndRetry(
 						() => answerUserQuestion(transcriptText, trimmedQuery, credentials, selectedLanguageOption),
 						SUMMARY_TIMEOUT_MS,
 						MAX_RETRY_ATTEMPTS,
 						'User question analysis',
 						handleRetry,
-					),
-					withTimeoutAndRetry(
-						() => analyzeVideo(transcriptText, credentials, selectedLanguageOption),
-						SUMMARY_TIMEOUT_MS,
-						MAX_RETRY_ATTEMPTS,
-						'Video analysis',
-						handleRetry,
-					),
-				]);
+					);
 
-				// Combine results: user answer goes in customAnswer field
-				initialResult = {
-					customAnswer: userAnswerResult,
-					summary: analysisResult.summary,
-					keyMoments: analysisResult.keyMoments,
-				};
+					// Combine new answer with cached summary
+					initialResult = {
+						customAnswer: userAnswerResult,
+						summary: cachedSummary.result.summary,
+						keyMoments: cachedSummary.result.keyMoments,
+					};
+				} else {
+					// No cached summary: make TWO separate API calls in parallel
+					const [userAnswerResult, analysisResult] = await Promise.all([
+						withTimeoutAndRetry(
+							() => answerUserQuestion(transcriptText, trimmedQuery, credentials, selectedLanguageOption),
+							SUMMARY_TIMEOUT_MS,
+							MAX_RETRY_ATTEMPTS,
+							'User question analysis',
+							handleRetry,
+						),
+						withTimeoutAndRetry(
+							() => analyzeVideo(transcriptText, credentials, selectedLanguageOption),
+							SUMMARY_TIMEOUT_MS,
+							MAX_RETRY_ATTEMPTS,
+							'Video analysis',
+							handleRetry,
+						),
+					]);
+
+					// Combine results: user answer goes in customAnswer field
+					initialResult = {
+						customAnswer: userAnswerResult,
+						summary: analysisResult.summary,
+						keyMoments: analysisResult.keyMoments,
+					};
+				}
 			} else {
 				// No question: just summarize with timeout and retry
 				initialResult = await withTimeoutAndRetry(
@@ -850,49 +874,61 @@ export default function App() {
 			setStatus(AppState.SUCCESS);
 			clearManualRetryTimer();
 
-			// Start improvement phase in background
-			setIsImproving(true);
-
-			try {
-				const improvedResult = await improveResult(
-					initialResult,
-					transcriptText,
-					credentials,
-					selectedLanguageOption,
-				);
-
-				if (requestToken.cancelled) {
-					setIsImproving(false);
-					return;
-				}
-
-				// Update with improved result
-				setResult(improvedResult);
-
-				// Save improved result to IndexedDB for persistence
-				const videoId = extractVideoId(currentVideoUrl);
-				if (videoId && currentVideoUrl) {
-					saveSummary(videoId, improvedResult, currentVideoUrl, language, trimmedQuery).catch((err) => {
-						console.warn('Failed to save summary to cache:', err);
-					});
-				}
-			} catch (improvementError) {
-				if (requestToken.cancelled) {
-					setIsImproving(false);
-					return;
-				}
-
-				// If improvement fails, keep the initial result and save it
-				console.warn('Improvement failed, keeping initial result:', improvementError);
+			// Start improvement phase in background (skip if we used cached summary)
+			if (usedCachedSummary) {
+				// Summary was already improved before caching, no need to improve again
+				// Just save the updated result with the new customAnswer
+				setIsImproving(false);
 				const videoId = extractVideoId(currentVideoUrl);
 				if (videoId && currentVideoUrl) {
 					saveSummary(videoId, initialResult, currentVideoUrl, language, trimmedQuery).catch((err) => {
 						console.warn('Failed to save summary to cache:', err);
 					});
 				}
-			} finally {
-				if (!requestToken.cancelled) {
-					setIsImproving(false);
+			} else {
+				setIsImproving(true);
+
+				try {
+					const improvedResult = await improveResult(
+						initialResult,
+						transcriptText,
+						credentials,
+						selectedLanguageOption,
+					);
+
+					if (requestToken.cancelled) {
+						setIsImproving(false);
+						return;
+					}
+
+					// Update with improved result
+					setResult(improvedResult);
+
+					// Save improved result to IndexedDB for persistence
+					const videoId = extractVideoId(currentVideoUrl);
+					if (videoId && currentVideoUrl) {
+						saveSummary(videoId, improvedResult, currentVideoUrl, language, trimmedQuery).catch((err) => {
+							console.warn('Failed to save summary to cache:', err);
+						});
+					}
+				} catch (improvementError) {
+					if (requestToken.cancelled) {
+						setIsImproving(false);
+						return;
+					}
+
+					// If improvement fails, keep the initial result and save it
+					console.warn('Improvement failed, keeping initial result:', improvementError);
+					const videoId = extractVideoId(currentVideoUrl);
+					if (videoId && currentVideoUrl) {
+						saveSummary(videoId, initialResult, currentVideoUrl, language, trimmedQuery).catch((err) => {
+							console.warn('Failed to save summary to cache:', err);
+						});
+					}
+				} finally {
+					if (!requestToken.cancelled) {
+						setIsImproving(false);
+					}
 				}
 			}
 		} catch (err: any) {
