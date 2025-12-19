@@ -32,7 +32,7 @@ const PROVIDER_CONFIG: Record<LLMProvider, ProviderConfig> = {
     sample: 'e.g., AIzaSyC... or AIxxx...',
   },
   openai: {
-    label: 'OpenAI GPT-4o mini',
+    label: 'OpenAI GPT-4.1 mini',
     helper: 'High uptime and broad compatibility with OpenAI tooling.',
     sample: 'e.g., sk-proj-xyz or sk-live-abc',
   },

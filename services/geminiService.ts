@@ -20,7 +20,7 @@ let lastAnalysisPrompt = '';
 
 const DEFAULT_MODELS: Record<LLMProvider, string> = {
   google: 'gemini-2.5-flash',
-  openai: 'o4-mini',
+  openai: 'gpt-4.1-mini',
   anthropic: 'claude-sonnet-4-5-20250929',
   groq: 'llama-3.3-70b-versatile',
   deepseek: 'deepseek-chat',
